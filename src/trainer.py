@@ -111,7 +111,8 @@ class Trainer:
                     self.optimizer.zero_grad()
                     continue
                     
-                torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
+                # More aggressive gradient clipping for Transformer stability
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=0.5)
                 self.scaler.step(self.optimizer)
                 self.scaler.update()
             else:
@@ -133,7 +134,8 @@ class Trainer:
                     self.optimizer.zero_grad()
                     continue
                     
-                torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
+                # More aggressive gradient clipping for Transformer stability
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=0.5)
                 self.optimizer.step()
             
             total_loss += loss.item()

@@ -48,6 +48,17 @@ class TransformerEncoder(nn.Module):
         
         self.dropout1 = nn.Dropout(dropout)
         self.dropout2 = nn.Dropout(dropout)
+        
+        # Initialize weights for better training stability
+        self._init_weights()
+    
+    def _init_weights(self):
+        """Initialize weights using Xavier uniform initialization."""
+        for name, param in self.named_parameters():
+            if 'weight' in name and param.dim() > 1:
+                nn.init.xavier_uniform_(param)
+            elif 'bias' in name:
+                nn.init.constant_(param, 0)
     
     def forward(
         self,
@@ -140,6 +151,20 @@ class ToxicCommentTransformer(nn.Module):
             nn.Dropout(dropout),
             nn.Linear(embedding_dim // 2, num_classes),
         )
+        
+        # Initialize weights for better training stability
+        self._init_weights()
+    
+    def _init_weights(self):
+        """Initialize weights using Xavier uniform initialization."""
+        for name, param in self.named_parameters():
+            if 'embedding' in name:
+                # Initialize embeddings with smaller variance
+                nn.init.normal_(param, mean=0.0, std=0.02)
+            elif 'weight' in name and param.dim() > 1:
+                nn.init.xavier_uniform_(param)
+            elif 'bias' in name:
+                nn.init.constant_(param, 0)
     
     def forward(
         self,
