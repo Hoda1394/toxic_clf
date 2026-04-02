@@ -1,0 +1,68 @@
+# Git ignore file for toxic comment classifier
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+venv/
+ENV/
+env/
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Data
+data/
+*.csv
+*.xlsx
+
+# Models and checkpoints
+checkpoints/
+*.pt
+*.pth
+*.pkl
+
+# Logs
+logs/
+*.log
+
+# OS
+.DS_Store
+.env
+
+# Temporary
+*.tmp
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Docker
+docker-compose.override.yml
+.dockerignore
