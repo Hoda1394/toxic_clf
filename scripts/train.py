@@ -12,8 +12,8 @@ import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.model import ToxicCommentTransformer
-from src.data import load_civil_comments_data, create_dataloaders, compute_class_weights
-from src.trainer import Trainer
+from src.data import load_civil_comments_data, create_dataloaders
+from src.trainer import Trainer, compute_class_weights
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -118,7 +118,6 @@ def main(args):
         mode="min",
         factor=0.5,
         patience=1,
-        verbose=True,
     )
     
     # Initialize trainer
