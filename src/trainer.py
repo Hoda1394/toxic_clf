@@ -79,6 +79,14 @@ class Trainer:
             attention_mask = batch["attention_mask"].to(self.device)
             labels = batch["labels"].to(self.device)
             
+            # Validate inputs
+            if torch.isnan(input_ids).any() or torch.isinf(input_ids).any():
+                logger.warning("NaN or Inf values in input_ids. Skipping batch.")
+                continue
+            if torch.isnan(labels).any() or torch.isinf(labels).any():
+                logger.warning("NaN or Inf values in labels. Skipping batch.")
+                continue
+            
             self.optimizer.zero_grad()
             
             # Forward pass
@@ -87,9 +95,22 @@ class Trainer:
                     logits = self.model(input_ids, attention_mask)
                     loss = loss_fn(logits.squeeze(), labels)
                 
+                # Check for NaN loss
+                if torch.isnan(loss):
+                    logger.warning(f"NaN loss detected in batch. Logits range: [{logits.min():.3f}, {logits.max():.3f}], Labels range: [{labels.min():.3f}, {labels.max():.3f}]")
+                    continue
+                
                 # Backward pass with scaler
                 self.scaler.scale(loss).backward()
                 self.scaler.unscale_(self.optimizer)
+                
+                # Check for NaN gradients
+                has_nan_grad = any(torch.isnan(p.grad).any() for p in self.model.parameters() if p.grad is not None)
+                if has_nan_grad:
+                    logger.warning(f"NaN gradients detected. Skipping optimizer step.")
+                    self.optimizer.zero_grad()
+                    continue
+                    
                 torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
                 self.scaler.step(self.optimizer)
                 self.scaler.update()
@@ -97,8 +118,21 @@ class Trainer:
                 logits = self.model(input_ids, attention_mask)
                 loss = loss_fn(logits.squeeze(), labels)
                 
+                # Check for NaN loss
+                if torch.isnan(loss):
+                    logger.warning(f"NaN loss detected in batch. Logits range: [{logits.min():.3f}, {logits.max():.3f}], Labels range: [{labels.min():.3f}, {labels.max():.3f}]")
+                    continue
+                
                 # Backward pass
                 loss.backward()
+                
+                # Check for NaN gradients
+                has_nan_grad = any(torch.isnan(p.grad).any() for p in self.model.parameters() if p.grad is not None)
+                if has_nan_grad:
+                    logger.warning(f"NaN gradients detected. Skipping optimizer step.")
+                    self.optimizer.zero_grad()
+                    continue
+                    
                 torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
                 self.optimizer.step()
             

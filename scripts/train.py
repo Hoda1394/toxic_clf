@@ -101,9 +101,10 @@ def main(args):
     logger.info(f"Class weights: {class_weights}")
     
     # Loss function with class weights
-    loss_fn = nn.BCEWithLogitsLoss(
-        pos_weight=class_weights[1] / class_weights[0] if class_weights[0] > 0 else 1.0
-    )
+    # Clamp pos_weight to prevent numerical instability
+    pos_weight_ratio = class_weights[1] / class_weights[0] if class_weights[0] > 0 else 1.0
+    pos_weight = torch.clamp(pos_weight_ratio, min=1.0, max=10.0)  # Reasonable bounds
+    loss_fn = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
     
     # Optimizer
     optimizer = optim.AdamW(
@@ -242,7 +243,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--learning_rate",
         type=float,
-        default=1e-3,
+        default=5e-5,  # Reduced from 1e-3 for stability
         help="Learning rate",
     )
     parser.add_argument(
