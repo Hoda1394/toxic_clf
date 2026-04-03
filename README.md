@@ -4,7 +4,7 @@ A custom lightweight Transformer-based classifier for detecting toxic comments i
 
 ## Overview
 
-This project implements a custom Transformer architecture from scratch using PyTorch (no pre-trained weights) for binary classification of toxic comments from the [Civil Comments dataset](https://www.kaggle.com/datasets/jigsaw-unintended-bias-in-toxicity-classification). The model uses pre-layer normalization for improved training stability.
+This project implements a custom Transformer architecture from scratch using PyTorch (no pre-trained weights) for binary classification of toxic comments from the [Civil Comments dataset](https://www.kaggle.com/competitions/jigsaw-unintended-bias-in-toxicity-classification/data). The model uses pre-layer normalization for improved training stability.
 
 ## Quick Start
 
@@ -69,7 +69,7 @@ Key hyperparameters:
 - `num_layers`: 3 (number of transformer blocks)
 - `nhead`: 4 (number of attention heads)
 - `dim_feedforward`: 512 (width of intermediate layer)
-- `max_seq_len`: 256 (maximum sequence length)
+- `max_seq_len`: 128 (maximum sequence length)
 
 ### Data Pipeline
 
@@ -85,7 +85,7 @@ Key hyperparameters:
   - Efficient memory usage
 
 - **Stratified Splits**: Data is split with stratification to maintain class balance:
-  - 80% train, 10% val, 10% test
+  - 70% train, 10% val, 20% test
 
 ### Class Imbalance Handling
 
@@ -154,9 +154,9 @@ Key hyperparameters:
 --num_layers 3               # Number of transformer layers
 --nhead 4                    # Number of attention heads
 --dim_feedforward 512        # Feedforward dimension
---max_seq_len 256            # Maximum sequence length
---batch_size 32              # Batch size
---learning_rate 0.001        # Learning rate
+--max_seq_len 128            # Maximum sequence length
+--batch_size 64              # Batch size
+--learning_rate 1e-7        # Learning rate
 --num_epochs 10              # Number of epochs
 --early_stopping_patience 3  # Early stopping patience
 ```
