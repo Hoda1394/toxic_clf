@@ -129,6 +129,7 @@ def main(args):
         scheduler=scheduler,
         checkpoint_dir=args.checkpoint_dir,
         use_amp=args.use_amp,
+        warmup_steps=args.warmup_steps,
     )
     
     # Train model
@@ -223,7 +224,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--max_seq_len",
         type=int,
-        default=256,
+        default=128,
         help="Maximum sequence length",
     )
     parser.add_argument(
@@ -237,13 +238,13 @@ if __name__ == "__main__":
     parser.add_argument(
         "--batch_size",
         type=int,
-        default=32,
+        default=64,
         help="Batch size",
     )
     parser.add_argument(
         "--learning_rate",
         type=float,
-        default=5e-5,  # Reduced from 1e-3 for stability
+        default=1e-7,  # Reduced from 1e-3 for stability
         help="Learning rate",
     )
     parser.add_argument(
@@ -263,6 +264,12 @@ if __name__ == "__main__":
         type=int,
         default=3,
         help="Early stopping patience",
+    )
+    parser.add_argument(
+        "--warmup_steps",
+        type=int,
+        default=100,
+        help="Number of warmup steps for learning rate",
     )
     
     # Other arguments

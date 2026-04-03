@@ -25,6 +25,7 @@ class Trainer:
         scheduler=None,
         checkpoint_dir: str = "./checkpoints",
         use_amp: bool = False,
+        warmup_steps: int = 100,
     ):
         """Initialize Trainer.
         
@@ -35,6 +36,7 @@ class Trainer:
             scheduler: Learning rate scheduler (optional)
             checkpoint_dir: Directory to save checkpoints
             use_amp: Whether to use automatic mixed precision
+            warmup_steps: Number of warmup steps for learning rate
         """
         self.model = model
         self.optimizer = optimizer
@@ -43,6 +45,11 @@ class Trainer:
         self.checkpoint_dir = Path(checkpoint_dir)
         self.checkpoint_dir.mkdir(exist_ok=True)
         self.use_amp = use_amp
+        self.warmup_steps = warmup_steps
+        self.current_step = 0
+        
+        # Store original learning rates for warmup
+        self.original_lrs = [group['lr'] for group in self.optimizer.param_groups]
         
         if use_amp:
             self.scaler = torch.cuda.amp.GradScaler()
@@ -93,6 +100,12 @@ class Trainer:
             if self.use_amp:
                 with torch.cuda.amp.autocast():
                     logits = self.model(input_ids, attention_mask)
+                    
+                    # Check for invalid logits before loss computation
+                    if torch.isnan(logits).any() or torch.isinf(logits).any():
+                        logger.warning(f"NaN/Inf in logits. Skipping batch.")
+                        continue
+                    
                     loss = loss_fn(logits.squeeze(), labels)
                 
                 # Check for NaN loss
@@ -111,12 +124,18 @@ class Trainer:
                     self.optimizer.zero_grad()
                     continue
                     
-                # More aggressive gradient clipping for Transformer stability
-                torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=0.5)
+                # Very aggressive gradient clipping for Transformer stability
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=0.25)
                 self.scaler.step(self.optimizer)
                 self.scaler.update()
             else:
                 logits = self.model(input_ids, attention_mask)
+                
+                # Check for invalid logits before loss computation
+                if torch.isnan(logits).any() or torch.isinf(logits).any():
+                    logger.warning(f"NaN/Inf in logits. Skipping batch.")
+                    continue
+                
                 loss = loss_fn(logits.squeeze(), labels)
                 
                 # Check for NaN loss
@@ -134,9 +153,17 @@ class Trainer:
                     self.optimizer.zero_grad()
                     continue
                     
-                # More aggressive gradient clipping for Transformer stability
-                torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=0.5)
+                # Very aggressive gradient clipping for Transformer stability
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=0.25)
                 self.optimizer.step()
+            
+            # Learning rate warmup
+            self.current_step += 1
+            if self.current_step <= self.warmup_steps:
+                # Linear warmup
+                warmup_factor = self.current_step / self.warmup_steps
+                for i, param_group in enumerate(self.optimizer.param_groups):
+                    param_group['lr'] = self.original_lrs[i] * warmup_factor
             
             total_loss += loss.item()
             progress_bar.set_postfix({"loss": loss.item()})
