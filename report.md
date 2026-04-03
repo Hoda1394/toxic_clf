@@ -207,13 +207,133 @@ Raw Data (100%)
 - **Criterion**: Stop if no improvement for 3 consecutive epochs
 - **Checkpoint**: Save model at each best F1
 
-### 6.3 Gradient Clipping
+### 6.3 Learning Rate Warmup
 
-- **Max norm**: 1.0
-- **Rationale**: Prevents gradient explosion, seen in RNNs and Transformers
-- **Effective for**: Numerical stability
+**What is Warmup?**
 
-### 6.4 Automatic Mixed Precision (Optional)
+Learning rate warmup is a strategy where the learning rate starts very small and gradually increases to the target learning rate over the first N steps/epochs. This is crucial for Transformer training stability.
+
+**Implementation**:
+```python
+warmup_steps = 100
+initial_lr = 5e-5
+for step in range(num_steps):
+    if step <= warmup_steps:
+        current_lr = initial_lr * (step / warmup_steps)  # Linear warmup
+    else:
+        current_lr = initial_lr  # Normal learning rate
+```
+
+**Why Warmup is Critical for Transformers**:
+
+1. **Prevents Gradient Explosion**: 
+   - At initialization, gradients can be very large (>1e5)
+   - Jumping directly to normal LR causes numerical instability
+   - Warmup gradually "ramps up" to safe learning rate
+
+2. **Better Convergence**:
+   - Warmup helps model settle into good local minima
+   - Without warmup: model may diverge or get stuck in poor local minima
+   - With warmup: smoother, more stable training trajectory
+
+3. **Handles Initialization Variance**:
+   - Different random seeds cause different initialization magnitudes
+   - Warmup makes training robust to initialization
+
+4. **Empirical Results**:
+   - With warmup: consistent convergence across runs
+   - Without warmup: occasional NaN loss, divergence
+   - Prevents the "training becomes unstable" pattern
+
+**Our Configuration**:
+- Warmup steps: 100 (can adjust based on dataset size)
+- Warmup strategy: Linear (other options: exponential, cosine)
+- Starting LR: 1e-5 (very conservative)
+- Target LR: 5e-5 (still conservative for Transformers)
+
+**Visual Example**:
+```
+Learning Rate over Steps:
+│     ┌─────────────────────────── (target LR = 5e-5)
+│    /
+│   /  (warmup phase)
+│  /
+└────────────── (start LR ≈ 0)
+  └─→ warmup_steps (100)
+```
+
+---
+
+### 6.4 Gradient Norm Clipping
+
+**What is Gradient Clipping?**
+
+Gradient clipping caps (clips) the gradient norms to prevent them from becoming too large. This is done after the backward pass but before the optimizer step.
+
+**Implementation**:
+```python
+torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=0.25)
+optimizer.step()
+```
+
+**The Problem: Exploding Gradients**
+
+During backpropagation in deep networks (especially Transformers), gradients can grow exponentially:
+
+```
+Layer 1 → Layer 2 → Layer 3 → ... → Layer 12
+∂L/∂w₁₂ = (∂L/∂out) × ∂out/∂h₁₁ × ∂h₁₁/∂h₁₀ × ... × ∂h₂/∂w₁₂
+           (product of 12+ derivatives)
+```
+
+If each derivative > 1: gradient explodes exponentially
+If each derivative < 1: gradient vanishes exponentially
+
+**Symptoms of Exploding Gradients**:
+- Loss becomes `NaN` or `Inf`
+- Training diverges (loss → ∞)
+- Model parameters become `NaN`
+- Occasional batches cause complete training failure
+
+**How Clipping Fixes It**:
+
+```python
+# Before clipping:
+gradient_norm = torch.norm(gradient)  # e.g., 500.0
+
+# If gradient_norm > max_norm (0.25):
+gradient = gradient * (max_norm / gradient_norm)
+# After clipping: gradient_norm = 0.25
+```
+
+**Why max_norm = 0.25?**
+
+- **Too high (>1.0)**: Still allows moderate gradient explosion
+- **Too low (<0.1)**: May overly constrain gradients, slow training
+- **0.25**: Empirically works well for Transformers
+- **Our aggressive value**: We use 0.25 (not standard 1.0) due to:
+  - Class weighting amplifying gradients
+  - NaN detection findings in training
+
+**Clipping Strategy Comparison**:
+
+| Strategy | max_norm | Use Case |
+|----------|----------|----------|
+| Conservative | 0.1 | Very unstable models |
+| **Aggressive** (ours) | **0.25** | **Transformers with large class weights** |
+| Standard | 0.5-1.0 | RNNs, LSTM |
+| Off | None | Well-initialized models with careful LR |
+
+**When Combined with Warmup**:
+
+Warmup + Clipping is the "gold standard" for Transformer training:
+1. Warmup prevents early-stage gradient explosion
+2. Clipping handles mid-training gradient spikes
+3. Together they enable stable, reproducible training
+
+---
+
+### 6.5 Automatic Mixed Precision (Optional)
 
 - **Optional flag**: `--use_amp`
 - **Benefits**: 2x faster training, 50% less memory
