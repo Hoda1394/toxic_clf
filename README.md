@@ -7,6 +7,7 @@ A custom lightweight Transformer-based classifier for detecting toxic comments i
 This project implements a custom Transformer architecture from scratch using PyTorch (no pre-trained weights) for binary classification of toxic comments from the [Civil Comments dataset](https://www.kaggle.com/competitions/jigsaw-unintended-bias-in-toxicity-classification/data). The model uses pre-layer normalization for improved training stability.
 
 ## Quick Start
+find project report [here](report.md).
 
 ### Installation
 
