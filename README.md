@@ -185,7 +185,7 @@ After training, the model reports:
 - `scikit-learn>=0.24.0`: ML utilities
 - `tqdm>=4.62.0`: Progress bars
 
-## Optional: Docker
+## Docker
 
 To run in Docker:
 
