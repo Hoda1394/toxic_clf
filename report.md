@@ -31,14 +31,7 @@ Input → LayerNorm → MultiheadAttention → Residual → Next Block
 - **nn.Linear**: Simple dense layers for feedforward network
 - **nn.LayerNorm**: Layer normalization for stability
 - **Learnable Positional Embeddings**: Instead of sinusoidal, to give model flexibility
-- **GELU Activation**: Smoother than ReLU, better for language tasks
-
-**Why Not Pre-trained Models?**
-1. **Full Control**: No overhead from large pre-trained weights
-2. **Custom Optimization**: Can optimize for specific use case
-3. **Production Ready**: Smaller model size (4-5MB vs 100-300MB)
-4. **Training Control**: Full visibility into training dynamics
-5. **Deployment**: Easier to optimize and deploy in constrained environments
+- **GELU Activation**: Smoother than ReLU, better for language tasks (or RELU)
 
 ### 1.3 Model Size
 
@@ -48,7 +41,7 @@ Input → LayerNorm → MultiheadAttention → Residual → Next Block
 - Attention heads: 4
 - Feedforward dimension: 512
 - Vocabulary: 10,000 tokens
-- Max sequence: 256 tokens
+- Max sequence: 128 tokens
 
 **Total Parameters**: ~4-5 million (~5MB)
 
@@ -134,7 +127,7 @@ This makes positive examples contribute more to the loss, compensating for class
 | **max_seq_len** | 256 | Covers 95% of real-world comments; manageable |
 | **dropout** | 0.1 | Moderate regularization; prevents overfitting |
 | **batch_size** | 32 | Balanced between gradient stability and memory |
-| **learning_rate** | 1e-3 | Good starting point for AdamW |
+| **learning_rate** | 1e-7 | Conservative starting point for AdamW |
 | **weight_decay** | 1e-5 | Light L2 regularization |
 
 ---
@@ -172,13 +165,13 @@ This makes positive examples contribute more to the loss, compensating for class
 
 ```
 Raw Data (100%)
-├── Train (80%)
+├── Train (70%)
 │   ├── Stratified by label
 │   └── Used for tokenizer vocab building
 ├── Validation (10%)
 │   └── Stratified by label
 │   └── Used for early stopping
-└── Test (10%)
+└── Test (20%)
     └── Stratified by label
     └── Used for final evaluation
 ```
@@ -216,7 +209,7 @@ Learning rate warmup is a strategy where the learning rate starts very small and
 **Implementation**:
 ```python
 warmup_steps = 100
-initial_lr = 5e-5
+initial_lr = 1e-7
 for step in range(num_steps):
     if step <= warmup_steps:
         current_lr = initial_lr * (step / warmup_steps)  # Linear warmup
@@ -436,12 +429,7 @@ quantized_model = quant.quantize_dynamic(model)
 # Better accuracy; requires retraining
 ```
 
-#### 3. **Knowledge Distillation**
-- Create smaller student model
-- Train on hard examples from teacher
-- 50% smaller, 2x faster with minimal accuracy loss
-
-#### 4. **Model Export and Optimization**
+#### 3. **Model Export and Optimization**
 ```python
 # TorchScript for faster inference
 scripted_model = torch.jit.script(model)
@@ -472,76 +460,11 @@ torch.nn.utils.prune.l1_unstructured(linear_layer, 'weight', amount=0.4)
 - dim_feedforward: 512 → 256
 - vocab_size: 10k → 5k
 
-**Impact**: 3x smaller, 4x faster, ~5% accuracy loss
-
-#### 8. **Caching Layer**
-```
-Request
-  ↓
-[Check Redis Cache] ← Cache similar embeddings
-  ↓
-[Tokenize] ← Cached vocab
-  ↓
-[Model Inference] ← Batch with wait-for buffer
-  ↓
-[Cache Result + Return]
-```
-
-### Estimated Performance After Changes
-
-| Strategy | Speedup | Size | Accuracy Loss |
-|----------|---------|------|----------------|
-| Batch (32) | 10x | - | 0% |
-| Quantization | 2-3x | 1.2MB | <1% |
-| Pruning (40%) | 2x | 3MB | <2% |
-| Distillation | 2x | 2MB | <2% |
-| Reduced model | 4x | 1.5MB | 3-5% |
-| **All combined** | **50-100x** | **1MB** | **5-8%** |
-
-**Result**: 10,000 req/sec with significant margin, using 1-2 GPUs instead of 10
-
-#### Recommended Production Setup
-
-1. Start with batch serving (10x improvement, no model changes)
-2. Add quantization (2-3x, 4KB of overhead)
-3. Monitor metrics, prune if needed (2-3x)
-4. Optional: Reduced architecture for extreme scaling
-
-**Cost**: From $10k/month (10 GPUs) to $500-1000/month (2 GPUs + compute)
+**Impact**: smaller model with faster inference and acceptable accuracy loss
 
 ---
 
-## 10. Code Quality and Maintainability
-
-### 10.1 Design Patterns
-
-1. **Modular Architecture**
-   - `model.py`: Pure architecture, no training logic
-   - `data.py`: Data handling, independent of training
-   - `trainer.py`: Training loop, decoupled from model
-   - `scripts/`: CLI interfaces
-
-2. **Configurable via Arguments**
-   - All hyperparameters exposed as CLI flags
-   - Easy to experiment without code changes
-   - Reproducible experiments with saved configs
-
-3. **Error Handling**
-   - Graceful handling of missing data
-   - Clear error messages
-   - Validation of inputs
-
-### 10.2 Testing Strategy (Future)
-
-Would add:
-- Unit tests for tokenizer
-- Unit tests for model forward pass shapes
-- Integration tests for data pipeline
-- Benchmark tests for inference speed
-
----
-
-## 11. Conclusion
+## 8. Conclusion
 
 This architecture represents a pragmatic balance between:
 - **Simplicity**: From-scratch implementation, no external dependencies for model
@@ -552,18 +475,4 @@ This architecture represents a pragmatic balance between:
 
 The design is production-ready for small to medium-scale deployments, and provides clear path to 10k req/sec through well-understood optimization strategies.
 
----
-
-## References
-
-1. Vaswani et al. (2017). "Attention Is All You Need" https://arxiv.org/abs/1706.03762
-2. Xiong et al. (2020). "Pre Layernorm Transformer" https://arxiv.org/abs/2002.04745
-3. Devlin et al. (2018). "BERT: Pre-training of Deep Bidirectional Transformers" https://arxiv.org/abs/1810.04805
-4. PyTorch Documentation on Distributed Training: https://pytorch.org/docs/stable/distributed.html
-5. Civil Comments Dataset: https://www.kaggle.com/c/jigsaw-unintended-bias-in-toxicity-classification
-
----
-
-**Report Version**: 1.0  
-**Date**: 2026-04-01  
-**Author**: AI Assistant
+#### **Author: Hoda Rajaei**

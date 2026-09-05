@@ -15,12 +15,25 @@ from src.model import ToxicCommentTransformer
 from src.data import load_civil_comments_data, create_dataloaders
 from src.trainer import Trainer, compute_class_weights
 
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
 def main(args):
     """Main training function."""
+
+    checkpoint_dir = Path(args.checkpoint_dir)
+    checkpoint_dir.mkdir(parents=True, exist_ok=True)
+    log_file = checkpoint_dir / "training.log"
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
+        handlers=[
+            logging.FileHandler(log_file),
+            logging.StreamHandler(),
+        ],
+        force=True,
+    )
+    logger.info(f"Logging training output to {log_file}")
     
     # Set seed for reproducibility
     torch.manual_seed(args.seed)
@@ -172,7 +185,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--target_column",
         type=str,
-        default="toxicity",
+        default="target",
         help="Name of target column in CSV",
     )
     

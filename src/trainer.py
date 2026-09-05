@@ -81,6 +81,7 @@ class Trainer:
             disable=False,
         )
         
+        nan_count = 0
         for batch in progress_bar:
             input_ids = batch["input_ids"].to(self.device)
             attention_mask = batch["attention_mask"].to(self.device)
@@ -117,10 +118,15 @@ class Trainer:
                 self.scaler.scale(loss).backward()
                 self.scaler.unscale_(self.optimizer)
                 
+                
                 # Check for NaN gradients
                 has_nan_grad = any(torch.isnan(p.grad).any() for p in self.model.parameters() if p.grad is not None)
                 if has_nan_grad:
                     logger.warning(f"NaN gradients detected. Skipping optimizer step.")
+                    nan_count += 1
+                    if nan_count > 20:
+                        print("Too many NaN gradients, stopping training.")
+                        break
                     self.optimizer.zero_grad()
                     continue
                     
