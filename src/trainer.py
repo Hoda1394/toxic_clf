@@ -64,6 +64,7 @@ class Trainer:
         train_loader: DataLoader,
         loss_fn: nn.Module,
         class_weights: torch.Tensor = None,
+        max_batches: int = None,
     ) -> float:
         """Train for one epoch.
         
@@ -71,6 +72,7 @@ class Trainer:
             train_loader: Training dataloader
             loss_fn: Loss function
             class_weights: Class weights for weighted loss
+            max_batches: Optional maximum number of batches to process
         
         Returns:
             Average training loss
@@ -85,7 +87,12 @@ class Trainer:
         )
         
         nan_count = 0
-        for batch in progress_bar:
+        processed_batches = 0
+        for batch_index, batch in enumerate(progress_bar):
+            if max_batches is not None and batch_index >= max_batches:
+                break
+
+            processed_batches += 1
             input_ids = batch["input_ids"].to(self.device)
             attention_mask = batch["attention_mask"].to(self.device)
             labels = batch["labels"].to(self.device)
@@ -177,7 +184,7 @@ class Trainer:
             total_loss += loss.item()
             progress_bar.set_postfix({"loss": loss.item()})
         
-        avg_loss = total_loss / len(train_loader)
+        avg_loss = total_loss / processed_batches if processed_batches else 0.0
         return avg_loss
     
     @torch.no_grad()
@@ -185,12 +192,14 @@ class Trainer:
         self,
         val_loader: DataLoader,
         loss_fn: nn.Module,
+        max_batches: int = None,
     ) -> Tuple[float, Dict]:
         """Evaluate model.
         
         Args:
             val_loader: Validation dataloader
             loss_fn: Loss function
+            max_batches: Optional maximum number of batches to process
         
         Returns:
             Tuple of (average loss, metrics dict)
@@ -206,7 +215,12 @@ class Trainer:
             disable=False,
         )
         
-        for batch in progress_bar:
+        processed_batches = 0
+        for batch_index, batch in enumerate(progress_bar):
+            if max_batches is not None and batch_index >= max_batches:
+                break
+
+            processed_batches += 1
             input_ids = batch["input_ids"].to(self.device)
             attention_mask = batch["attention_mask"].to(self.device)
             labels = batch["labels"].to(self.device)
@@ -246,7 +260,7 @@ class Trainer:
             "f1": f1,
         }
         
-        avg_loss = total_loss / len(val_loader)
+        avg_loss = total_loss / processed_batches if processed_batches else 0.0
         return avg_loss, metrics
     
     def train(
@@ -256,6 +270,8 @@ class Trainer:
         num_epochs: int,
         loss_fn: nn.Module,
         patience: int = 3,
+        max_train_batches: int = None,
+        max_val_batches: int = None,
     ) -> Dict:
         """Full training loop.
         
@@ -265,6 +281,8 @@ class Trainer:
             num_epochs: Number of epochs
             loss_fn: Loss function
             patience: Early stopping patience
+            max_train_batches: Optional maximum training batches per epoch
+            max_val_batches: Optional maximum validation batches per epoch
         
         Returns:
             Training history dictionary
@@ -282,12 +300,20 @@ class Trainer:
             logger.info(f"Epoch {epoch + 1}/{num_epochs}")
             
             # Train
-            train_loss = self.train_epoch(train_loader, loss_fn)
+            train_loss = self.train_epoch(
+                train_loader,
+                loss_fn,
+                max_batches=max_train_batches,
+            )
             history["train_loss"].append(train_loss)
             logger.info(f"Train loss: {train_loss:.4f}")
             
             # Evaluate
-            val_loss, metrics = self.evaluate(val_loader, loss_fn)
+            val_loss, metrics = self.evaluate(
+                val_loader,
+                loss_fn,
+                max_batches=max_val_batches,
+            )
             history["val_loss"].append(val_loss)
             history["val_metrics"].append(metrics)
             

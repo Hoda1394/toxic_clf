@@ -155,13 +155,19 @@ def main(args):
         num_epochs=args.num_epochs,
         loss_fn=loss_fn,
         patience=args.early_stopping_patience,
+        max_train_batches=args.max_train_batches,
+        max_val_batches=args.max_val_batches,
     )
     
     logger.info("Training completed!")
     
     # Final evaluation on test set
     logger.info("Evaluating on test set...")
-    test_loss, test_metrics = trainer.evaluate(test_loader, loss_fn)
+    test_loss, test_metrics = trainer.evaluate(
+        test_loader,
+        loss_fn,
+        max_batches=args.max_test_batches,
+    )
     logger.info(f"Test loss: {test_loss:.4f}")
     logger.info(f"Test metrics: {test_metrics}")
     if trainer.summary_writer is not None:
@@ -287,6 +293,24 @@ if __name__ == "__main__":
         type=int,
         default=100,
         help="Number of warmup steps for learning rate",
+    )
+    parser.add_argument(
+        "--max_train_batches",
+        type=int,
+        default=None,
+        help="Maximum training batches per epoch (useful for debugging)",
+    )
+    parser.add_argument(
+        "--max_val_batches",
+        type=int,
+        default=None,
+        help="Maximum validation batches per epoch (useful for debugging)",
+    )
+    parser.add_argument(
+        "--max_test_batches",
+        type=int,
+        default=None,
+        help="Maximum test batches for final evaluation (useful for debugging)",
     )
     
     # Other arguments
