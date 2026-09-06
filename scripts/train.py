@@ -5,6 +5,7 @@ import logging
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from torch.utils.tensorboard import SummaryWriter
 from pathlib import Path
 import sys
 
@@ -143,6 +144,7 @@ def main(args):
         checkpoint_dir=args.checkpoint_dir,
         use_amp=args.use_amp,
         warmup_steps=args.warmup_steps,
+        summary_writer=SummaryWriter(log_dir=checkpoint_dir / "tensorboard"),
     )
     
     # Train model
@@ -162,6 +164,8 @@ def main(args):
     test_loss, test_metrics = trainer.evaluate(test_loader, loss_fn)
     logger.info(f"Test loss: {test_loss:.4f}")
     logger.info(f"Test metrics: {test_metrics}")
+    if trainer.summary_writer is not None:
+        trainer.summary_writer.close()
 
 
 if __name__ == "__main__":
@@ -269,7 +273,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--num_epochs",
         type=int,
-        default=10,
+        default=5,
         help="Number of epochs",
     )
     parser.add_argument(

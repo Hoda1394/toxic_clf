@@ -26,6 +26,7 @@ class Trainer:
         checkpoint_dir: str = "./checkpoints",
         use_amp: bool = False,
         warmup_steps: int = 100,
+        summary_writer=None,
     ):
         """Initialize Trainer.
         
@@ -37,6 +38,7 @@ class Trainer:
             checkpoint_dir: Directory to save checkpoints
             use_amp: Whether to use automatic mixed precision
             warmup_steps: Number of warmup steps for learning rate
+            summary_writer: Optional TensorBoard SummaryWriter
         """
         self.model = model
         self.optimizer = optimizer
@@ -46,6 +48,7 @@ class Trainer:
         self.checkpoint_dir.mkdir(exist_ok=True)
         self.use_amp = use_amp
         self.warmup_steps = warmup_steps
+        self.summary_writer = summary_writer
         self.current_step = 0
         
         # Store original learning rates for warmup
@@ -290,6 +293,24 @@ class Trainer:
             
             logger.info(f"Val loss: {val_loss:.4f}")
             logger.info(f"Metrics: {metrics}")
+
+            if self.summary_writer is not None:
+                self.summary_writer.add_scalars(
+                    "Loss",
+                    {"train": train_loss, "validation": val_loss},
+                    epoch,
+                )
+                self.summary_writer.add_scalars(
+                    "Metrics",
+                    metrics,
+                    epoch,
+                )
+                self.summary_writer.add_scalar(
+                    "Training/learning_rate",
+                    self.optimizer.param_groups[0]["lr"],
+                    epoch,
+                )
+                self.summary_writer.flush()
             
             # Update learning rate
             if self.scheduler:

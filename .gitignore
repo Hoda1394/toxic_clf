@@ -42,7 +42,7 @@ env/
 data/
 *.csv
 *.xlsx
-
+my_run/
 # Models and checkpoints
 checkpoints/
 *.pt
