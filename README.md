@@ -34,6 +34,18 @@ Basic usage:
 python scripts/train.py --data_path data/train.csv
 ```
 
+Use a preset from `src/config.py`:
+```bash
+python scripts/train.py --config small
+python scripts/train.py --config medium
+python scripts/train.py --config aggressive
+```
+
+Command-line values override the selected preset:
+```bash
+python scripts/train.py --config small --num_epochs 5 --batch_size 64
+```
+
 With custom hyperparameters:
 ```bash
 python scripts/train.py \
@@ -145,7 +157,7 @@ toxic-classifier/
 
 ## Configuration
 
-All hyperparameters can be configured via command-line arguments. See `scripts/train.py --help` for full list.
+Hyperparameters can be loaded from the presets in `src/config.py` with `--config` and overridden via command-line arguments. See `scripts/train.py --help` for the full list.
 
 Key hyperparameters:
 
