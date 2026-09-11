@@ -128,6 +128,14 @@ def main(args):
         force=True,
     )
     logger.info(f"Logging training output to {log_file}")
+    logger.info(
+        "Training configuration: batch_size=%d, max_train_batches=%s, "
+        "max_val_batches=%s, max_test_batches=%s",
+        args.batch_size,
+        args.max_train_batches or "all",
+        args.max_val_batches or "all",
+        args.max_test_batches or "all",
+    )
     
     # Set seed for reproducibility
     torch.manual_seed(args.seed)
@@ -174,6 +182,13 @@ def main(args):
         max_seq_len=args.max_seq_len,
         vocab_size=args.vocab_size,
         num_workers=args.num_workers,
+    )
+
+    logger.info(
+        "Available batches: train=%d, validation=%d, test=%d",
+        len(train_loader),
+        len(val_loader),
+        len(test_loader),
     )
     
     logger.info(f"Vocabulary size: {len(tokenizer.token2id)}")
