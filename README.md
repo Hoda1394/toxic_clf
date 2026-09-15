@@ -1,13 +1,11 @@
 # Toxic Comment Classifier
 
-A custom lightweight Transformer-based classifier for detecting toxic comments in high-volume text data.
+A custom lightweight Transformer-based classifier for detecting toxic comments in high-volume text data. I wanted to experience training a transformer model from scratch. So, I created this project.
 
 ## Overview
 
-This project implements a custom Transformer architecture from scratch using PyTorch (no pre-trained weights) for binary classification of toxic comments from the [Civil Comments dataset](https://www.kaggle.com/competitions/jigsaw-unintended-bias-in-toxicity-classification/data). The model uses pre-layer normalization for improved training stability.
+This project implements a custom Transformer architecture from scratch using PyTorch (no pre-trained weights) for binary classification of toxic comments from the [Civil Comments dataset](https://www.kaggle.com/competitions/jigsaw-unintended-bias-in-toxicity-classification/data). The model uses pre-layer normalization for improved training stability. 
 
-## Quick Start
-find project report [here](report.md).
 
 ### Installation
 
@@ -223,6 +221,8 @@ docker run --gpus all -v /path/to/data:/data toxic-classifier
 ## Future Improvements
 
 - [ ] Add BERT tokenization for better subword handling
+- [ ] Make the model more robust
+- [ ] Make model more explainable
 - [ ] Implement DistributedDataParallel for multi-machine training
 - [ ] Add hyperparameter search (Ray Tune)
 - [ ] Add model quantization for deployment
