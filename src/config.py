@@ -12,7 +12,7 @@ class DataConfig:
     """Data configuration."""
     data_path: str = "data/train.csv"
     text_column: str = "text"
-    target_column: str = "toxicity"
+    target_column: str = "target"
     test_size: float = 0.2
     val_size: float = 0.1
     max_seq_len: int = 256
