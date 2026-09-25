@@ -293,7 +293,9 @@ class Trainer:
             "val_metrics": [],
         }
         
-        best_val_f1 = 0.0
+        best_val_f1 = float("-inf")
+        best_epoch = None
+        best_checkpoint_path = None
         patience_counter = 0
         
         for epoch in range(num_epochs):
@@ -345,8 +347,10 @@ class Trainer:
             # Early stopping
             if metrics["f1"] > best_val_f1:
                 best_val_f1 = metrics["f1"]
+                best_epoch = epoch
                 patience_counter = 0
                 self.save_checkpoint(epoch, metrics)
+                best_checkpoint_path = self.checkpoint_dir / f"model_epoch_{epoch}.pt"
                 logger.info(f"Best F1 score: {best_val_f1:.4f}, saving checkpoint")
             else:
                 patience_counter += 1
@@ -354,6 +358,19 @@ class Trainer:
                     logger.info(f"Early stopping after {epoch + 1} epochs")
                     break
         
+        if best_checkpoint_path is not None:
+            checkpoint = torch.load(best_checkpoint_path, map_location=self.device)
+            self.model.load_state_dict(checkpoint["model_state_dict"])
+            logger.info(
+                "Restored best checkpoint from epoch %d (validation F1: %.4f)",
+                best_epoch + 1,
+                best_val_f1,
+            )
+            history["best_epoch"] = best_epoch
+            history["best_val_f1"] = best_val_f1
+        else:
+            logger.warning("No checkpoint was saved; model remains at its final state.")
+
         return history
     
     def save_checkpoint(self, epoch: int, metrics: Dict):
