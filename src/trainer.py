@@ -388,20 +388,36 @@ class Trainer:
 
 
 def compute_class_weights(labels: np.ndarray) -> torch.Tensor:
-    """Compute class weights to handle imbalance.
-    
-    Using inverse frequency weighting.
-    
-    Args:
-        labels: Array of binary labels
-    
-    Returns:
-        Tensor of class weights
+    """Compute inverse-frequency class weights for binary labels.
+
+    For binary labels with classes {0, 1}, the weight for each class is:
+    total / (2 * count(class))
+
+    This yields a positive weight larger than 1 when class 1 is underrepresented.
     """
-    counts = np.bincount(labels)
+    labels = np.asarray(labels, dtype=np.int64)
+    counts = np.bincount(labels, minlength=2)
     total = len(labels)
-    
-    # Weight is inversely proportional to frequency
+
+    if total == 0:
+        return torch.tensor([1.0, 1.0], dtype=torch.float)
+
     weights = total / (2 * counts)
-    
     return torch.tensor(weights, dtype=torch.float)
+
+
+def compute_pos_weight(labels: np.ndarray) -> torch.Tensor:
+    """Compute BCEWithLogitsLoss pos_weight for the positive class.
+
+    For binary labels, this matches the expected imbalance ratio used by the
+    README and the project documentation:
+    pos_weight = count(negative) / count(positive)
+    """
+    labels = np.asarray(labels, dtype=np.int64)
+    counts = np.bincount(labels, minlength=2)
+
+    if counts[1] == 0:
+        return torch.tensor(1.0, dtype=torch.float)
+
+    pos_weight = counts[0] / counts[1]
+    return torch.tensor(pos_weight, dtype=torch.float)

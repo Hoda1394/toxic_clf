@@ -55,6 +55,10 @@ python scripts/train.py \
     --num_layers 4
 ```
 
+Each training run writes its checkpoints, `training.log`, and TensorBoard data
+to a new timestamped directory under `checkpoints/`, for example:
+`checkpoints/2026-09-24_14-30-00/`.
+
 ### Evaluation
 
 Evaluate a trained model:

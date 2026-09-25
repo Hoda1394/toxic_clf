@@ -7,6 +7,7 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.tensorboard import SummaryWriter
 from dataclasses import replace
+from datetime import datetime
 from pathlib import Path
 import sys
 
@@ -15,7 +16,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.model import ToxicCommentTransformer
 from src.data import load_civil_comments_data, create_dataloaders
-from src.trainer import Trainer, compute_class_weights
+from src.trainer import Trainer, compute_class_weights, compute_pos_weight
 from src.config import (
     AGGRESSIVE_TRAINING,
     Config,
@@ -32,6 +33,21 @@ CONFIG_PRESETS = {
     "medium": MEDIUM_MODEL,
     "aggressive": AGGRESSIVE_TRAINING,
 }
+
+
+def create_run_directory(base_directory: str) -> Path:
+    """Create a unique timestamped directory for one training run."""
+    base_path = Path(base_directory)
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    run_path = base_path / timestamp
+    suffix = 1
+
+    while run_path.exists():
+        run_path = base_path / f"{timestamp}_{suffix}"
+        suffix += 1
+
+    run_path.mkdir(parents=True)
+    return run_path
 
 
 def apply_config(args):
@@ -115,8 +131,8 @@ def apply_config(args):
 def main(args):
     """Main training function."""
 
-    checkpoint_dir = Path(args.checkpoint_dir)
-    checkpoint_dir.mkdir(parents=True, exist_ok=True)
+    checkpoint_dir = create_run_directory(args.checkpoint_dir)
+    args.checkpoint_dir = str(checkpoint_dir)
     log_file = checkpoint_dir / "training.log"
     logging.basicConfig(
         level=logging.INFO,
@@ -221,11 +237,10 @@ def main(args):
     class_weights = compute_class_weights(train_df["label"].values)
     class_weights = class_weights.to(device)
     logger.info(f"Class weights: {class_weights}")
-    
-    # Loss function with class weights
-    # Clamp pos_weight to prevent numerical instability
-    pos_weight_ratio = class_weights[1] / class_weights[0] if class_weights[0] > 0 else 1.0
-    pos_weight = torch.clamp(pos_weight_ratio, min=1.0, max=10.0)  # Reasonable bounds
+
+    # BCEWithLogitsLoss pos_weight should match the true imbalance ratio.
+    pos_weight = compute_pos_weight(train_df["label"].values).to(device)
+    logger.info(f"Positive class pos_weight: {pos_weight.item():.4f}")
     loss_fn = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
     
     # Optimizer
