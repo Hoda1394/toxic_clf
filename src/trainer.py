@@ -381,12 +381,13 @@ class Trainer:
             metrics: Evaluation metrics
         """
         checkpoint_path = self.checkpoint_dir / f"model_epoch_{epoch}.pt"
+        safe_metrics = {name: float(value) for name, value in metrics.items()}
         torch.save(
             {
                 "epoch": epoch,
                 "model_state_dict": self.model.state_dict(),
                 "optimizer_state_dict": self.optimizer.state_dict(),
-                "metrics": metrics,
+                "metrics": safe_metrics,
             },
             checkpoint_path,
         )
