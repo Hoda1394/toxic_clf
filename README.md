@@ -59,6 +59,19 @@ Each training run writes its checkpoints, `training.log`, and TensorBoard data
 to a new timestamped directory under `checkpoints/`, for example:
 `checkpoints/2026-09-24_14-30-00/`.
 
+### Baseline
+
+Train a TF-IDF (word + character n-grams) + logistic regression baseline on the
+same train/val/test split as `scripts/train.py`:
+```bash
+python scripts/baseline.py
+```
+
+It reports ROC-AUC, PR-AUC, precision, recall and F1, both at a 0.5 threshold
+and at the threshold that maximizes F1 on the validation set. Use
+`--max_train_samples 0` to train on the full training set (needs more memory).
+The transformer should beat this baseline to justify its extra cost.
+
 ### Evaluation
 
 Evaluate a trained model:
