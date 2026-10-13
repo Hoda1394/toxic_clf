@@ -139,33 +139,24 @@ class ToxicCommentDataset(Dataset):
         text = self.texts[idx]
         label = self.labels[idx]
         
-        # Validate input
-        if not isinstance(text, str) or len(text.strip()) == 0:
-            # Return a dummy sample for empty/invalid text
-            input_ids = [0] * self.max_seq_len
-            attention_mask = [0] * self.max_seq_len
-            label = 0.0
-        else:
-            # Tokenize on the fly
-            input_ids = self.tokenizer.encode(text)
-            
-            # Validate tokenization result
-            if len(input_ids) == 0:
-                # Empty after tokenization, use dummy
-                input_ids = [0] * self.max_seq_len
-                attention_mask = [0] * self.max_seq_len
-                label = 0.0
-            else:
-                # Truncate to max_seq_len
-                input_ids = input_ids[:self.max_seq_len]
-                
-                # Create attention mask (1 for valid tokens, 0 for padding)
-                attention_mask = [1] * len(input_ids)
-                
-                # Pad to max_seq_len
-                padding_len = self.max_seq_len - len(input_ids)
-                input_ids = input_ids + [0] * padding_len
-                attention_mask = attention_mask + [0] * padding_len
+        if not isinstance(text, str):
+            text = ""
+
+        # Tokenize on the fly and truncate to max_seq_len
+        input_ids = self.tokenizer.encode(text)[:self.max_seq_len]
+
+        # Texts with no word tokens (e.g. ":(") become a single <UNK>, so
+        # attention always has at least one position to attend to
+        if len(input_ids) == 0:
+            input_ids = [self.tokenizer.token2id["<UNK>"]]
+
+        # Create attention mask (1 for valid tokens, 0 for padding)
+        attention_mask = [1] * len(input_ids)
+
+        # Pad to max_seq_len
+        padding_len = self.max_seq_len - len(input_ids)
+        input_ids = input_ids + [0] * padding_len
+        attention_mask = attention_mask + [0] * padding_len
         
         return {
             "input_ids": torch.tensor(input_ids, dtype=torch.long),
