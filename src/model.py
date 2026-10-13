@@ -77,35 +77,17 @@ class TransformerEncoder(nn.Module):
         # Pre-layer norm + self-attention
         normed = self.norm1(x)
         
-        # # Clamp normed values to prevent extreme values
-        # normed = torch.clamp(normed, -10, 10)
-        
         attn_out, _ = self.self_attn(
             normed, normed, normed, key_padding_mask=mask
         )
         
-        # Check for NaN in attention output
-        # if torch.isnan(attn_out).any():
-        #     # Skip the residual connection if attention produced NaN
-        #     x = x
-        # else:
-        #     x = x + self.dropout1(attn_out)
         x = x + self.dropout1(attn_out)
         
         # Pre-layer norm + feedforward
         normed = self.norm2(x)
         
-        # # Clamp normed values again
-        # normed = torch.clamp(normed, -10, 10)
-        
         ff_out = self.feedforward(normed)
         
-        # Check for NaN in feedforward output
-        # if torch.isnan(ff_out).any():
-        #     # Skip the residual connection if feedforward produced NaN
-        #     x = x
-        # else:
-        #     x = x + self.dropout2(ff_out)
         x = x + self.dropout2(ff_out)
         return x
 

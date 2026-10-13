@@ -29,7 +29,7 @@ class ModelConfig:
     nhead: int = 4
     dim_feedforward: int = 512
     max_seq_len: int = 256
-    dropout: float = 0.5
+    dropout: float = 0.1
     num_classes: int = 1
 
 

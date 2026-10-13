@@ -100,7 +100,8 @@ def main(args):
 
     print("Training logistic regression...")
     model = LogisticRegression(C=args.C, max_iter=1000)
-    model.fit(X_train, train_df["label"])
+    # After preprocessing, the label column is binary (0 or 1) returned by load_civil_comments_data
+    model.fit(X_train, train_df["label"])   
 
     val_probs = model.predict_proba(X_val)[:, 1]
     test_probs = model.predict_proba(X_test)[:, 1]
