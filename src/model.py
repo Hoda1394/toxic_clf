@@ -77,35 +77,36 @@ class TransformerEncoder(nn.Module):
         # Pre-layer norm + self-attention
         normed = self.norm1(x)
         
-        # Clamp normed values to prevent extreme values
-        normed = torch.clamp(normed, -10, 10)
+        # # Clamp normed values to prevent extreme values
+        # normed = torch.clamp(normed, -10, 10)
         
         attn_out, _ = self.self_attn(
             normed, normed, normed, key_padding_mask=mask
         )
         
         # Check for NaN in attention output
-        if torch.isnan(attn_out).any():
-            # Skip the residual connection if attention produced NaN
-            x = x
-        else:
-            x = x + self.dropout1(attn_out)
+        # if torch.isnan(attn_out).any():
+        #     # Skip the residual connection if attention produced NaN
+        #     x = x
+        # else:
+        #     x = x + self.dropout1(attn_out)
+        x = x + self.dropout1(attn_out)
         
         # Pre-layer norm + feedforward
         normed = self.norm2(x)
         
-        # Clamp normed values again
-        normed = torch.clamp(normed, -10, 10)
+        # # Clamp normed values again
+        # normed = torch.clamp(normed, -10, 10)
         
         ff_out = self.feedforward(normed)
         
         # Check for NaN in feedforward output
-        if torch.isnan(ff_out).any():
-            # Skip the residual connection if feedforward produced NaN
-            x = x
-        else:
-            x = x + self.dropout2(ff_out)
-        
+        # if torch.isnan(ff_out).any():
+        #     # Skip the residual connection if feedforward produced NaN
+        #     x = x
+        # else:
+        #     x = x + self.dropout2(ff_out)
+        x = x + self.dropout2(ff_out)
         return x
 
 
@@ -211,8 +212,8 @@ class ToxicCommentTransformer(nn.Module):
         # Token embedding
         x = self.embedding(input_ids)
         
-        # Clamp embeddings to reasonable range
-        x = torch.clamp(x, -5, 5)
+        # # Clamp embeddings to reasonable range
+        # x = torch.clamp(x, -5, 5)
         
         # Add positional embedding
         positions = torch.arange(seq_len, device=input_ids.device).unsqueeze(0)
@@ -225,10 +226,10 @@ class ToxicCommentTransformer(nn.Module):
         for encoder_layer in self.encoder_layers:
             x = encoder_layer(x, mask=mask)
             
-            # Check for NaN after each layer
-            if torch.isnan(x).any():
-                # Reset to previous valid state if NaN detected
-                x = torch.zeros_like(x) + 1e-6  # Small constant to avoid zero
+            # # Check for NaN after each layer
+            # if torch.isnan(x).any():
+            #     # Reset to previous valid state if NaN detected
+            #     x = torch.zeros_like(x) + 1e-6  # Small constant to avoid zero
         
         # Global average pooling (ignore padding tokens)
         if attention_mask is not None:
@@ -240,8 +241,8 @@ class ToxicCommentTransformer(nn.Module):
         else:
             x = x.mean(1)  # Average pooling over sequence
         
-        # Clamp pooled output
-        x = torch.clamp(x, -10, 10)
+        # # Clamp pooled output
+        # x = torch.clamp(x, -10, 10)
         
         # Final layer norm
         x = self.layer_norm(x)
@@ -249,7 +250,7 @@ class ToxicCommentTransformer(nn.Module):
         # Classification head
         logits = self.classifier(x)
         
-        # Final clamp on logits to prevent extreme values
-        logits = torch.clamp(logits, -10, 10)
+        # # Final clamp on logits to prevent extreme values
+        # logits = torch.clamp(logits, -10, 10)
         
         return logits

@@ -141,7 +141,7 @@ class Trainer:
                     continue
                     
                 # Very aggressive gradient clipping for Transformer stability
-                torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=0.25)
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1)
                 self.scaler.step(self.optimizer)
                 self.scaler.update()
             else:
@@ -170,7 +170,7 @@ class Trainer:
                     continue
                     
                 # Very aggressive gradient clipping for Transformer stability
-                torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=0.25)
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1)
                 self.optimizer.step()
             
             # Learning rate warmup
