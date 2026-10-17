@@ -16,7 +16,12 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.model import ToxicCommentTransformer
 from src.data import load_civil_comments_data, create_dataloaders
-from src.trainer import Trainer, compute_class_weights, compute_pos_weight
+from src.trainer import (
+    Trainer, 
+    compute_class_weights, 
+    compute_pos_weight, 
+    get_warmup_cosine_schedule
+)
 from src.config import (
     AGGRESSIVE_TRAINING,
     Config,
@@ -250,13 +255,14 @@ def main(args):
         weight_decay=args.weight_decay,
     )
     
-    # Learning rate scheduler
-    scheduler = optim.lr_scheduler.ReduceLROnPlateau(
-        optimizer,
-        mode="min",
-        factor=0.5,
-        patience=1,
-    )
+    # Learning rate scheduler: linear warmup, then cosine decay over the whole run
+    steps_per_epoch = len(train_loader)
+    if args.max_train_batches is not None:
+        steps_per_epoch = min(steps_per_epoch, args.max_train_batches)
+    total_steps = steps_per_epoch * args.num_epochs
+    warmup_steps = int(args.warmup_ratio * total_steps)
+    scheduler = get_warmup_cosine_schedule(optimizer, warmup_steps, total_steps)
+    logger.info(f"LR schedule: {warmup_steps} warmup steps, {total_steps} total steps")
     
     # Initialize trainer
     trainer = Trainer(
@@ -266,7 +272,7 @@ def main(args):
         scheduler=scheduler,
         checkpoint_dir=args.checkpoint_dir,
         use_amp=args.use_amp,
-        warmup_steps=args.warmup_steps,
+        log_every=args.log_every,
         summary_writer=SummaryWriter(log_dir=checkpoint_dir / "tensorboard"),
     )
     
@@ -419,10 +425,16 @@ if __name__ == "__main__":
         help="Early stopping patience",
     )
     parser.add_argument(
-        "--warmup_steps",
+        "--warmup_ratio",
+        type=float,
+        default=0.05,
+        help="Fraction of total training steps used for linear warmup",
+    )
+    parser.add_argument(
+        "--log_every",
         type=int,
-        default=100,
-        help="Number of warmup steps for learning rate",
+        default=200,
+        help="Log training loss to TensorBoard every this many steps",
     )
     parser.add_argument(
         "--max_train_batches",

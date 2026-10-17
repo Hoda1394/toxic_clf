@@ -30,12 +30,12 @@ and F1 in the results log at the bottom.
 
 ## 3. Learning-rate schedule
 
-- [ ] **Replace `ReduceLROnPlateau`** with linear warmup (~5% of total steps)
+- [x] **Replace `ReduceLROnPlateau`** with linear warmup (~5% of total steps)
   followed by cosine or linear decay, stepped every batch
   (e.g. `transformers.get_cosine_schedule_with_warmup`, or `LambdaLR`).
-- [ ] **Remove the manual warmup code** in `Trainer.train_epoch` once the
+- [x] **Remove the manual warmup code** in `Trainer.train_epoch` once the
   scheduler handles warmup.
-- [ ] **Try a few peak learning rates** (e.g. 3e-4, 5e-4, 1e-3 with AdamW) on a
+- [x] **Try a few peak learning rates** (e.g. 3e-4, 5e-4, 1e-3 with AdamW) on a
   fraction of an epoch and keep the best.
 
 ## 4. Evaluation and model selection
@@ -98,4 +98,6 @@ and F1 in the results log at the bottom.
 | Step | Change | Val PR-AUC | Val F1 (tuned) | Test PR-AUC | Test F1 (tuned) | Notes |
 |---|---|---|---|---|---|---|
 | 1 | TF-IDF + LR baseline (400k rows) | 0.698 | 0.633 | 0.694 | 0.630 | threshold 0.26 |
-| – | Current transformer (best run) | – | – | – | 0.623 (at 0.5) | before any changes |
+| – | Current transformer (best run) | – | – | – | 0.623 (at 0.5) | before any changes; 759k params (64-dim) |
+| 2 | Dropout 0.1, clip 1.0, no clamps/NaN checks; lr 1e-3 constant | – | – | – | 0.573 (at 0.5) | run `2026-10-13_12-06-52`; 1.9M params (128-dim); train loss rose every epoch → lr too high; stopped at epoch 4, best epoch 1 |
+| 3 | Warmup (5%) + cosine decay, peak lr 5e-4, 4 epochs | 0.694 | 0.632 | 0.696 | 0.634 | run `2026-10-16_13-41-27`; best epoch 4; F1 at 0.5: 0.617 test; tuned threshold 0.80; ROC-AUC 0.936 test; train loss 0.78 → 0.61, val loss rose after epoch 2 |

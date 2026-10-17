@@ -1,8 +1,9 @@
 """Training loop and utilities."""
-
+import math
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from torch.optim.lr_scheduler import LambdaLR
 from torch.utils.data import DataLoader
 from typing import Dict, Tuple
 import numpy as np
@@ -25,7 +26,7 @@ class Trainer:
         scheduler=None,
         checkpoint_dir: str = "./checkpoints",
         use_amp: bool = False,
-        warmup_steps: int = 100,
+        log_every: int = 200,
         summary_writer=None,
     ):
         """Initialize Trainer.
@@ -37,7 +38,7 @@ class Trainer:
             scheduler: Learning rate scheduler (optional)
             checkpoint_dir: Directory to save checkpoints
             use_amp: Whether to use automatic mixed precision
-            warmup_steps: Number of warmup steps for learning rate
+            log_every: Log training loss to TensorBoard every this many steps
             summary_writer: Optional TensorBoard SummaryWriter
         """
         self.model = model
@@ -47,12 +48,9 @@ class Trainer:
         self.checkpoint_dir = Path(checkpoint_dir)
         self.checkpoint_dir.mkdir(exist_ok=True)
         self.use_amp = use_amp
-        self.warmup_steps = warmup_steps
+        self.log_every = log_every
         self.summary_writer = summary_writer
         self.current_step = 0
-        
-        # Store original learning rates for warmup
-        self.original_lrs = [group['lr'] for group in self.optimizer.param_groups]
         
         if use_amp:
             self.scaler = torch.cuda.amp.GradScaler()
@@ -79,6 +77,7 @@ class Trainer:
         """
         self.model.train()
         total_loss = 0.0
+        running_loss = 0.0
         
         progress_bar = tqdm(
             train_loader,
@@ -126,16 +125,25 @@ class Trainer:
                 torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
                 self.optimizer.step()
             
-            # Learning rate warmup
+            # Per-step learning rate schedule (warmup + cosine decay)
+            if self.scheduler is not None:
+                self.scheduler.step()
             self.current_step += 1
-            if self.current_step <= self.warmup_steps:
-                # Linear warmup
-                warmup_factor = self.current_step / self.warmup_steps
-                for i, param_group in enumerate(self.optimizer.param_groups):
-                    param_group['lr'] = self.original_lrs[i] * warmup_factor
             
-            total_loss += loss.item()
-            progress_bar.set_postfix({"loss": loss.item()})
+            loss_value = loss.item()
+            total_loss += loss_value
+            running_loss += loss_value
+            progress_bar.set_postfix({"loss": loss_value})
+
+            # Average loss and current learning rate over the last log_every steps
+            if self.summary_writer is not None and self.current_step % self.log_every == 0:
+                self.summary_writer.add_scalar(
+                    "Training/loss_per_step", running_loss / self.log_every, self.current_step
+                )
+                self.summary_writer.add_scalar(
+                    "Training/lr_per_step", self.optimizer.param_groups[0]["lr"], self.current_step
+                )
+                running_loss = 0.0
         
         avg_loss = total_loss / processed_batches if processed_batches else 0.0
         return avg_loss
@@ -179,12 +187,12 @@ class Trainer:
             labels = batch["labels"].to(self.device)
             
             logits = self.model(input_ids, attention_mask)
-            loss = loss_fn(logits.squeeze(), labels)
+            loss = loss_fn(logits.squeeze(-1), labels)
             
             total_loss += loss.item()
             
             # Get predictions
-            probs = torch.sigmoid(logits.squeeze())
+            probs = torch.sigmoid(logits.squeeze(-1))
             preds = (probs >= 0.5).long().cpu().numpy()
             
             all_preds.extend(preds)
@@ -286,16 +294,8 @@ class Trainer:
                     metrics,
                     epoch,
                 )
-                self.summary_writer.add_scalar(
-                    "Training/learning_rate",
-                    self.optimizer.param_groups[0]["lr"],
-                    epoch,
-                )
+                
                 self.summary_writer.flush()
-            
-            # Update learning rate
-            if self.scheduler:
-                self.scheduler.step(val_loss)
             
             # Early stopping
             if metrics["f1"] > best_val_f1:
@@ -392,3 +392,21 @@ def compute_pos_weight(labels: np.ndarray) -> torch.Tensor:
 
     pos_weight = counts[0] / counts[1]
     return torch.tensor(pos_weight, dtype=torch.float)
+
+
+def get_warmup_cosine_schedule(
+    optimizer: optim.Optimizer,
+    warmup_steps: int,
+    total_steps: int,
+) -> LambdaLR:
+    """Linear warmup from 0 to the base learning rate, then cosine decay to 0.
+
+    Call scheduler.step() once per optimizer step (every batch), not per epoch.
+    """
+    def lr_lambda(step: int) -> float:
+        if step < warmup_steps:
+            return (step + 1) / warmup_steps
+        progress = (step - warmup_steps) / max(1, total_steps - warmup_steps)
+        return 0.5 * (1.0 + math.cos(math.pi * min(progress, 1.0)))
+
+    return LambdaLR(optimizer, lr_lambda)
