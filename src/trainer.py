@@ -7,6 +7,13 @@ from torch.optim.lr_scheduler import LambdaLR
 from torch.utils.data import DataLoader
 from typing import Dict, Tuple
 import numpy as np
+from sklearn.metrics import (
+    accuracy_score,
+    average_precision_score,
+    f1_score,
+    precision_score,
+    recall_score,
+    roc_auc_score,)
 from tqdm import tqdm
 import logging
 from pathlib import Path
@@ -167,7 +174,7 @@ class Trainer:
         """
         self.model.eval()
         total_loss = 0.0
-        all_preds = []
+        all_probs = []
         all_labels = []
         
         progress_bar = tqdm(
@@ -193,32 +200,26 @@ class Trainer:
             
             # Get predictions
             probs = torch.sigmoid(logits.squeeze(-1))
-            preds = (probs >= 0.5).long().cpu().numpy()
-            
-            all_preds.extend(preds)
+            all_probs.extend(probs.cpu().numpy())
             all_labels.extend(labels.cpu().numpy().astype(int))
             
             progress_bar.set_postfix({"loss": loss.item()})
         
         # Calculate metrics
-        all_preds = np.array(all_preds)
+        all_probs = np.array(all_probs)
         all_labels = np.array(all_labels)
-        
-        tp = np.sum((all_preds == 1) & (all_labels == 1))
-        fp = np.sum((all_preds == 1) & (all_labels == 0))
-        fn = np.sum((all_preds == 0) & (all_labels == 1))
-        tn = np.sum((all_preds == 0) & (all_labels == 0))
-        
-        precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
-        recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
-        f1 = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0.0
-        accuracy = (tp + tn) / len(all_labels)
+        all_preds = (all_probs >= 0.5).astype(int)
+
+        # AUC metrics need both classes present (not guaranteed with tiny max_batches)
+        has_both_classes = len(np.unique(all_labels)) == 2
         
         metrics = {
-            "accuracy": accuracy,
-            "precision": precision,
-            "recall": recall,
-            "f1": f1,
+            "accuracy": float(accuracy_score(all_labels, all_preds)),
+            "precision": float(precision_score(all_labels, all_preds, zero_division=0)),
+            "recall": float(recall_score(all_labels, all_preds, zero_division=0)),
+            "f1": float(f1_score(all_labels, all_preds, zero_division=0)),
+            "roc_auc": float(roc_auc_score(all_labels, all_probs)) if has_both_classes else float("nan"),
+            "pr_auc": float(average_precision_score(all_labels, all_probs)) if has_both_classes else float("nan"),
         }
         
         avg_loss = total_loss / processed_batches if processed_batches else 0.0
@@ -233,6 +234,7 @@ class Trainer:
         patience: int = 3,
         max_train_batches: int = None,
         max_val_batches: int = None,
+        selection_metric: str = "pr_auc",
     ) -> Dict:
         """Full training loop.
         
@@ -244,7 +246,7 @@ class Trainer:
             patience: Early stopping patience
             max_train_batches: Optional maximum training batches per epoch
             max_val_batches: Optional maximum validation batches per epoch
-        
+            selection_metric: Metric to use for checkpointing and early stopping
         Returns:
             Training history dictionary
         """
@@ -254,7 +256,7 @@ class Trainer:
             "val_metrics": [],
         }
         
-        best_val_f1 = float("-inf")
+        best_val_score = float("-inf")
         best_epoch = None
         best_checkpoint_path = None
         patience_counter = 0
@@ -294,33 +296,36 @@ class Trainer:
                     metrics,
                     epoch,
                 )
-                
+
                 self.summary_writer.flush()
             
-            # Early stopping
-            if metrics["f1"] > best_val_f1:
-                best_val_f1 = metrics["f1"]
+            # Early stopping on the selection metric (PR-AUC by default: threshold-free, so much less noisy between epochs than F1 at 0.5)
+            score = metrics.get(selection_metric, float("-inf"))
+            if score > best_val_score:
+                best_val_score = score
                 best_epoch = epoch
                 patience_counter = 0
                 self.save_checkpoint(epoch, metrics)
                 best_checkpoint_path = self.checkpoint_dir / f"model_epoch_{epoch}.pt"
-                logger.info(f"Best F1 score: {best_val_f1:.4f}, saving checkpoint")
+                logger.info(f"Best {selection_metric}: {best_val_score:.4f}, saving checkpoint")
             else:
                 patience_counter += 1
+                logger.info(f"No improvement in {selection_metric}. Patience: {patience_counter}/{patience}")
                 if patience_counter >= patience:
-                    logger.info(f"Early stopping after {epoch + 1} epochs")
+                    logger.info(f"Early stopping after ({epoch + 1}) epochs with no improvement in {selection_metric}.")
                     break
         
         if best_checkpoint_path is not None:
             checkpoint = torch.load(best_checkpoint_path, map_location=self.device)
             self.model.load_state_dict(checkpoint["model_state_dict"])
             logger.info(
-                "Restored best checkpoint from epoch %d (validation F1: %.4f)",
+                "Restored best checkpoint from epoch %d (validation %s: %.4f)",
                 best_epoch + 1,
-                best_val_f1,
+                selection_metric,
+                best_val_score,
             )
             history["best_epoch"] = best_epoch
-            history["best_val_f1"] = best_val_f1
+            history["best_val_" + selection_metric] = best_val_score
         else:
             logger.warning("No checkpoint was saved; model remains at its final state.")
 
