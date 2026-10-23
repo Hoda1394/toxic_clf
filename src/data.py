@@ -182,17 +182,21 @@ class ToxicCommentDataset(Dataset):
         labels: list,
         tokenizer: SimpleTokenizer,
         max_seq_len: int = 256,
+        targets: Optional[list] = None,
     ):
         """Initialize dataset.
         
         Args:
             texts: List of text strings
-            labels: List of binary labels (0 or 1)
+            labels: List of binary labels (0 or 1), used for metrics
             tokenizer: Tokenizer instance
             max_seq_len: Maximum sequence length
+            targets: Optional training targets for the loss, e.g. soft toxicity
+                scores in [0, 1]; defaults to the binary labels
         """
         self.texts = texts
         self.labels = labels
+        self.targets = targets if targets is not None else labels
         self.tokenizer = tokenizer
         self.max_seq_len = max_seq_len
     
@@ -206,10 +210,11 @@ class ToxicCommentDataset(Dataset):
             idx: Sample index
         
         Returns:
-            Dictionary with input_ids, attention_mask, and label
+            Dictionary with input_ids, label (for metrics) and target (for the loss)
         """
         text = self.texts[idx]
         label = self.labels[idx]
+        target = self.targets[idx]
         
         if not isinstance(text, str):
             text = ""
@@ -226,6 +231,7 @@ class ToxicCommentDataset(Dataset):
         return {
             "input_ids": torch.tensor(input_ids, dtype=torch.long),
             "label": torch.tensor(label, dtype=torch.float),
+            "target": torch.tensor(target, dtype=torch.float),
         }
 
 
@@ -250,11 +256,13 @@ def collate_fn(batch: list) -> Dict:
     attention_mask = (torch.arange(input_ids.size(1)) < lengths.unsqueeze(1)).long()
 
     labels = torch.stack([item["label"] for item in batch])
+    targets = torch.stack([item["target"] for item in batch])
 
     return {
         "input_ids": input_ids,
         "attention_mask": attention_mask,
         "labels": labels,
+        "targets": targets,
     }
 
 
@@ -374,6 +382,7 @@ def create_dataloaders(
     tokenizer_type: str = "word",
     tokenizer=None,
     seed: int = 42,
+    soft_target_column: Optional[str] = None,
 ) -> Tuple[DataLoader, DataLoader, DataLoader, Union[SimpleTokenizer, BPETokenizer]]:
     """Create DataLoaders for train/val/test sets.
 
@@ -390,6 +399,9 @@ def create_dataloaders(
         tokenizer: Optional already-built tokenizer; if given, tokenizer_type
             and vocab_size are ignored and no vocabulary is built
         seed: Random seed for batch order
+        soft_target_column: Optional column with soft targets in [0, 1] (e.g. the
+            fraction of annotators who rated a comment toxic) to train on
+            instead of the 0/1 label; metrics always use the 0/1 label
 
     Returns:
         Tuple of (train_loader, val_loader, test_loader, tokenizer)
@@ -412,6 +424,7 @@ def create_dataloaders(
             df["label"].tolist(),
             tokenizer,
             max_seq_len=max_seq_len,
+            targets=df[soft_target_column].tolist() if soft_target_column else None,
         )
         lengths = [len(text) if isinstance(text, str) else 0 for text in df[text_column]]
         return DataLoader(

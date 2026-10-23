@@ -101,7 +101,7 @@ class Trainer:
             processed_batches += 1
             input_ids = batch["input_ids"].to(self.device)
             attention_mask = batch["attention_mask"].to(self.device)
-            labels = batch["labels"].to(self.device)
+            targets = batch["targets"].to(self.device)
 
             self.optimizer.zero_grad()
 
@@ -109,10 +109,10 @@ class Trainer:
             if self.use_amp:
                 with torch.cuda.amp.autocast():
                     logits = self.model(input_ids, attention_mask)
-                    loss = loss_fn(logits.squeeze(-1), labels)
+                    loss = loss_fn(logits.squeeze(-1), targets)
             else:
                 logits = self.model(input_ids, attention_mask)
-                loss = loss_fn(logits.squeeze(-1), labels)
+                loss = loss_fn(logits.squeeze(-1), targets)
 
             # Fail loudly: a non-finite loss means a real bug or a too-high learning rate
             if not torch.isfinite(loss):
@@ -193,9 +193,12 @@ class Trainer:
             input_ids = batch["input_ids"].to(self.device)
             attention_mask = batch["attention_mask"].to(self.device)
             labels = batch["labels"].to(self.device)
+            targets = batch["targets"].to(self.device)
             
+            # Loss on the training targets (comparable to the training loss);
+            # metrics on the 0/1 labels
             logits = self.model(input_ids, attention_mask)
-            loss = loss_fn(logits.squeeze(-1), labels)
+            loss = loss_fn(logits.squeeze(-1), targets)
             
             total_loss += loss.item()
             

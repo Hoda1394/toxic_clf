@@ -74,6 +74,7 @@ def apply_config(args):
         max_seq_len=args.max_seq_len if args.max_seq_len is not None else data_config.max_seq_len,
         vocab_size=args.vocab_size if args.vocab_size is not None else data_config.vocab_size,
         tokenizer=args.tokenizer if args.tokenizer is not None else data_config.tokenizer,
+        soft_labels=args.soft_labels if args.soft_labels is not None else data_config.soft_labels,
         seed=args.seed if args.seed is not None else data_config.seed,
     )
     model_config = replace(
@@ -121,6 +122,7 @@ def apply_config(args):
     args.max_seq_len = data_config.max_seq_len
     args.vocab_size = data_config.vocab_size
     args.tokenizer = data_config.tokenizer
+    args.soft_labels = data_config.soft_labels
     args.seed = data_config.seed
     args.embedding_dim = model_config.embedding_dim
     args.num_layers = model_config.num_layers
@@ -209,6 +211,7 @@ def main(args):
         num_workers=args.num_workers,
         tokenizer_type=args.tokenizer,
         seed=args.seed,
+        soft_target_column=args.target_column if args.soft_labels else None,
     )
 
     logger.info(
@@ -219,6 +222,10 @@ def main(args):
     )
     
     logger.info(f"Tokenizer: {args.tokenizer}, vocabulary size: {len(tokenizer.token2id)}")
+    logger.info(
+        "Loss targets: %s",
+        f"soft scores from '{args.target_column}'" if args.soft_labels else "0/1 labels",
+    )
 
     # Save the BPE tokenizer with the run, so evaluate.py uses exactly the same one
     if args.tokenizer == "bpe":
@@ -390,6 +397,12 @@ if __name__ == "__main__":
         choices=["word", "bpe"],
         default=None,
         help="Tokenizer: word-level (word) or byte-level BPE subwords (bpe)",
+    )
+    parser.add_argument(
+        "--soft_labels",
+        action="store_true",
+        default=None,
+        help="Train on the soft toxicity score (target column) instead of the 0/1 label",
     )
     parser.add_argument(
         "--embedding_dim",

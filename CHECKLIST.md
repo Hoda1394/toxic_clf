@@ -75,9 +75,14 @@ and F1 in the results log at the bottom.
 - [ ] **Compare with and without `pos_weight`.** With threshold tuning in place,
   the class weighting may no longer be needed, and without it the predicted
   probabilities are better calibrated.
-- [ ] **Train on soft labels:** use the continuous `target` score (0–1) as the
+- [x] **Implement soft labels:** use the continuous `target` score (0–1) as the
   BCE target instead of the 0/1 label, and keep the 0/1 label for metrics.
   About a third of the "toxic" examples have a target below 0.6.
+  Enabled with `--soft_labels`; the loss uses the `target` score, metrics and
+  threshold tuning still use the 0/1 label. Losses are not comparable with
+  0/1-label runs: soft targets put a floor under the loss.
+- [ ] **Run the soft-label experiment** with the same settings as the step 5 BPE
+  run (`--tokenizer bpe`, lr 5e-4, 4 epochs) and compare PR-AUC and tuned F1.
 
 ## 7. Scale up
 

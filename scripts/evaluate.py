@@ -58,6 +58,7 @@ def main(args):
         vocab_size=args.vocab_size,
         tokenizer=tokenizer,
         seed=args.seed,
+        soft_target_column=args.target_column if args.soft_labels else None,
     )
     
     # Load model
@@ -204,6 +205,11 @@ if __name__ == "__main__":
         type=float,
         default=None,
         help="Decision threshold (default: the one saved in the checkpoint, else 0.5)",
+    )
+    parser.add_argument(
+        "--soft_labels",
+        action="store_true",
+        help="Compute the loss on soft targets, as in a --soft_labels training run (metrics are unaffected)",
     )
     parser.add_argument(
         "--max_test_batches",
