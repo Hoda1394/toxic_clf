@@ -45,6 +45,7 @@ class TrainingConfig:
     early_stopping_patience: int = 3
     checkpoint_dir: str = "checkpoints"
     use_amp: bool = False
+    use_pos_weight: bool = True
 
 
 @dataclass

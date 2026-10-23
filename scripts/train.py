@@ -112,6 +112,11 @@ def apply_config(args):
             else training_config.checkpoint_dir
         ),
         use_amp=args.use_amp if args.use_amp is not None else training_config.use_amp,
+        use_pos_weight=(
+            not args.no_pos_weight
+            if args.no_pos_weight is not None
+            else training_config.use_pos_weight
+        ),
     )
 
     args.data_path = data_config.data_path
@@ -136,6 +141,7 @@ def apply_config(args):
     args.early_stopping_patience = training_config.early_stopping_patience
     args.checkpoint_dir = training_config.checkpoint_dir
     args.use_amp = training_config.use_amp
+    args.use_pos_weight = training_config.use_pos_weight
     return args
 
 
@@ -260,9 +266,15 @@ def main(args):
     class_weights = class_weights.to(device)
     logger.info(f"Class weights: {class_weights}")
 
-    # BCEWithLogitsLoss pos_weight should match the true imbalance ratio.
-    pos_weight = compute_pos_weight(train_df["label"].values).to(device)
-    logger.info(f"Positive class pos_weight: {pos_weight.item():.4f}")
+    # BCEWithLogitsLoss pos_weight should match the true imbalance ratio. Without
+    # it, predicted probabilities stay calibrated; threshold tuning on validation
+    # then handles the imbalance when making decisions.
+    if args.use_pos_weight:
+        pos_weight = compute_pos_weight(train_df["label"].values).to(device)
+        logger.info(f"Positive class pos_weight: {pos_weight.item():.4f}")
+    else:
+        pos_weight = None
+        logger.info("Positive class pos_weight: none (unweighted loss)")
     loss_fn = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
     
     # Optimizer
@@ -521,6 +533,12 @@ if __name__ == "__main__":
         type=int,
         default=0,
         help="Number of workers for DataLoader",
+    )
+    parser.add_argument(
+        "--no_pos_weight",
+        action="store_true",
+        default=None,
+        help="Train with an unweighted loss instead of pos_weight = negatives/positives",
     )
     parser.add_argument(
         "--use_amp",

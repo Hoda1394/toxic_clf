@@ -78,7 +78,7 @@ def main(args):
     model = model.to(device)
     
     # Loss function: same pos_weight as training, so the loss matches the training log
-    pos_weight = compute_pos_weight(train_df["label"].values).to(device)
+    pos_weight = None if args.no_pos_weight else compute_pos_weight(train_df["label"].values).to(device)
     loss_fn = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
     
     # Create trainer for evaluation
@@ -210,6 +210,11 @@ if __name__ == "__main__":
         "--soft_labels",
         action="store_true",
         help="Compute the loss on soft targets, as in a --soft_labels training run (metrics are unaffected)",
+    )
+    parser.add_argument(
+        "--no_pos_weight",
+        action="store_true",
+        help="Compute the loss without pos_weight, as in a --no_pos_weight training run (metrics are unaffected)",
     )
     parser.add_argument(
         "--max_test_batches",
