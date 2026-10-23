@@ -64,7 +64,7 @@ and F1 in the results log at the bottom.
 - [x] **Implement a subword tokenizer:** byte-level BPE (`BPETokenizer` in
   `src/data.py`), trained on the training split, selected with
   `--tokenizer bpe` and saved as `tokenizer.json` in the run folder.
-- [ ] **Run the BPE experiment** on the full data with the same settings as the
+- [x] **Run the BPE experiment** on the full data with the same settings as the
   step 3 run (lr 5e-4, 4 epochs, vocab 10,000) and compare.
 - [x] **`max_seq_len`: keep 256.** With word tokens 192 would cover 99%, but BPE
   tokens are ~35% longer (99th percentile 248), so 192 would truncate 7.8% of
@@ -109,3 +109,4 @@ and F1 in the results log at the bottom.
 | – | Current transformer (best run) | – | – | – | 0.623 (at 0.5) | before any changes; 759k params (64-dim) |
 | 2 | Dropout 0.1, clip 1.0, no clamps/NaN checks; lr 1e-3 constant | – | – | – | 0.573 (at 0.5) | run `2026-10-13_12-06-52`; 1.9M params (128-dim); train loss rose every epoch → lr too high; stopped at epoch 4, best epoch 1 |
 | 3 | Warmup (5%) + cosine decay, peak lr 5e-4, 4 epochs | 0.694 | 0.632 | 0.696 | 0.634 | run `2026-10-16_13-41-27`; best epoch 4; F1 at 0.5: 0.617 test; tuned threshold 0.80; ROC-AUC 0.936 test; train loss 0.78 → 0.61, val loss rose after epoch 2 |
+| 5 | BPE tokenizer (vocab 10k), length-grouped batches; otherwise as step 3 | 0.701 | 0.637 | 0.698 | 0.634 | run `2026-10-23_11-12-45`; best epoch 4 (PR-AUC equal to epoch 3: 0.7009); F1 at 0.5: 0.625 test; tuned threshold 0.74; ROC-AUC 0.939 test; ~19 min/epoch; train loss 0.79 → 0.59, val loss 0.74 → 0.92 |
