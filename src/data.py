@@ -1,10 +1,13 @@
 """Data loading and preprocessing pipeline."""
 
+import math
 import torch
 import pandas as pd
 import numpy as np
-from typing import Tuple, Dict, Optional
-from torch.utils.data import Dataset, DataLoader
+from pathlib import Path
+from typing import Tuple, Dict, Optional, Union
+from tokenizers import Tokenizer, decoders, models, normalizers, pre_tokenizers, trainers
+from torch.utils.data import Dataset, DataLoader, Sampler
 from torch.nn.utils.rnn import pad_sequence
 from sklearn.model_selection import train_test_split
 from collections import Counter
@@ -102,6 +105,74 @@ class SimpleTokenizer:
         return " ".join(tokens)
 
 
+class BPETokenizer:
+    """Byte-level BPE subword tokenizer, built on HuggingFace `tokenizers`.
+
+    Has the same interface as SimpleTokenizer (build_vocab, encode, decode,
+    token2id), so the dataset and model don't need to know which one is used.
+
+    Byte-level means any string can be encoded without <UNK>: unseen or
+    obfuscated words such as "sh*tty" become several subword pieces instead
+    of disappearing, and emoticons such as ":(" become real tokens.
+    """
+
+    def __init__(self, vocab_size: int = 10000):
+        """Initialize tokenizer.
+
+        Args:
+            vocab_size: Maximum vocabulary size, including special tokens
+        """
+        self.vocab_size = vocab_size
+        self.tokenizer = Tokenizer(models.BPE())
+        # Lowercase like SimpleTokenizer, so only the subword splitting differs
+        self.tokenizer.normalizer = normalizers.Sequence([
+            normalizers.NFKC(),
+            normalizers.Lowercase(),
+        ])
+        self.tokenizer.pre_tokenizer = pre_tokenizers.ByteLevel(add_prefix_space=True)
+        self.tokenizer.decoder = decoders.ByteLevel()
+        self.token2id = {}
+
+    def build_vocab(self, texts: list):
+        """Learn BPE merges from texts.
+
+        Args:
+            texts: List of text strings
+        """
+        trainer = trainers.BpeTrainer(
+            vocab_size=self.vocab_size,
+            min_frequency=2,
+            # Listed first so they get the same ids as in SimpleTokenizer
+            special_tokens=["<PAD>", "<UNK>"],
+            initial_alphabet=pre_tokenizers.ByteLevel.alphabet(),
+            show_progress=False,
+        )
+        texts = [text for text in texts if isinstance(text, str)]
+        self.tokenizer.train_from_iterator(texts, trainer=trainer)
+        self.token2id = self.tokenizer.get_vocab()
+
+    def encode(self, text: str) -> list:
+        """Encode text to token IDs."""
+        return self.tokenizer.encode(text).ids
+
+    def decode(self, ids: list) -> str:
+        """Decode token IDs to text."""
+        return self.tokenizer.decode(ids)
+
+    def save(self, path: Union[str, Path]):
+        """Save the trained tokenizer to a JSON file."""
+        self.tokenizer.save(str(path))
+
+    @classmethod
+    def load(cls, path: Union[str, Path]) -> "BPETokenizer":
+        """Load a tokenizer saved with save()."""
+        bpe_tokenizer = cls()
+        bpe_tokenizer.tokenizer = Tokenizer.from_file(str(path))
+        bpe_tokenizer.token2id = bpe_tokenizer.tokenizer.get_vocab()
+        bpe_tokenizer.vocab_size = len(bpe_tokenizer.token2id)
+        return bpe_tokenizer
+
+
 class ToxicCommentDataset(Dataset):
     """Dataset for toxic comment classification."""
     
@@ -187,6 +258,61 @@ def collate_fn(batch: list) -> Dict:
     }
 
 
+class LengthGroupedBatchSampler(Sampler):
+    """Yields batches of similar-length examples, in random order.
+
+    Shuffles all indices, cuts them into chunks of `chunk_batches` batches,
+    sorts each chunk by length and splits it into batches, then shuffles the
+    order of the batches. Each batch needs very little padding, while the
+    sequence of batches the model sees is still random.
+    """
+
+    def __init__(
+        self,
+        lengths: list,
+        batch_size: int,
+        seed: int = 42,
+        reshuffle: bool = True,
+        chunk_batches: int = 100,
+    ):
+        """Initialize sampler.
+
+        Args:
+            lengths: Approximate length of each example (only used for sorting)
+            batch_size: Batch size
+            seed: Random seed
+            reshuffle: New order every epoch (training); if False, the same
+                order every time (evaluation), so max_batches always picks the
+                same random, unbiased subset
+            chunk_batches: Number of batches per sorted chunk
+        """
+        self.lengths = np.asarray(lengths)
+        self.batch_size = batch_size
+        self.seed = seed
+        self.reshuffle = reshuffle
+        self.chunk_size = batch_size * chunk_batches
+        self.epoch = 0
+
+    def __iter__(self):
+        rng = np.random.default_rng(self.seed + self.epoch)
+        if self.reshuffle:
+            self.epoch += 1
+
+        indices = rng.permutation(len(self.lengths))
+        batches = []
+        for start in range(0, len(indices), self.chunk_size):
+            chunk = indices[start:start + self.chunk_size]
+            chunk = chunk[np.argsort(self.lengths[chunk], kind="stable")]
+            for batch_start in range(0, len(chunk), self.batch_size):
+                batches.append(chunk[batch_start:batch_start + self.batch_size].tolist())
+
+        rng.shuffle(batches)
+        return iter(batches)
+
+    def __len__(self) -> int:
+        return math.ceil(len(self.lengths) / self.batch_size)
+
+
 def load_civil_comments_data(
     csv_path: str,
     text_column: str = "text",
@@ -245,9 +371,12 @@ def create_dataloaders(
     max_seq_len: int = 256,
     vocab_size: int = 10000,
     num_workers: int = 0,
-) -> Tuple[DataLoader, DataLoader, DataLoader, SimpleTokenizer]:
+    tokenizer_type: str = "word",
+    tokenizer=None,
+    seed: int = 42,
+) -> Tuple[DataLoader, DataLoader, DataLoader, Union[SimpleTokenizer, BPETokenizer]]:
     """Create DataLoaders for train/val/test sets.
-    
+
     Args:
         train_df: Training dataframe
         val_df: Validation dataframe
@@ -257,59 +386,48 @@ def create_dataloaders(
         max_seq_len: Maximum sequence length
         vocab_size: Vocabulary size
         num_workers: Number of workers for DataLoader
-    
+        tokenizer_type: "word" (SimpleTokenizer) or "bpe" (BPETokenizer)
+        tokenizer: Optional already-built tokenizer; if given, tokenizer_type
+            and vocab_size are ignored and no vocabulary is built
+        seed: Random seed for batch order
+
     Returns:
         Tuple of (train_loader, val_loader, test_loader, tokenizer)
     """
-    # Build tokenizer on training data
-    tokenizer = SimpleTokenizer(vocab_size=vocab_size)
-    tokenizer.build_vocab(train_df[text_column].tolist())
-    
-    # Create datasets
-    train_dataset = ToxicCommentDataset(
-        train_df[text_column].tolist(),
-        train_df["label"].tolist(),
-        tokenizer,
-        max_seq_len=max_seq_len,
-    )
-    
-    val_dataset = ToxicCommentDataset(
-        val_df[text_column].tolist(),
-        val_df["label"].tolist(),
-        tokenizer,
-        max_seq_len=max_seq_len,
-    )
-    
-    test_dataset = ToxicCommentDataset(
-        test_df[text_column].tolist(),
-        test_df["label"].tolist(),
-        tokenizer,
-        max_seq_len=max_seq_len,
-    )
-    
-    # Create dataloaders
-    train_loader = DataLoader(
-        train_dataset,
-        batch_size=batch_size,
-        shuffle=True,
-        collate_fn=collate_fn,
-        num_workers=num_workers,
-    )
-    
-    val_loader = DataLoader(
-        val_dataset,
-        batch_size=batch_size,
-        shuffle=False,
-        collate_fn=collate_fn,
-        num_workers=num_workers,
-    )
-    
-    test_loader = DataLoader(
-        test_dataset,
-        batch_size=batch_size,
-        shuffle=False,
-        collate_fn=collate_fn,
-        num_workers=num_workers,
-    )
+    # Build tokenizer on training data only, so val/test don't leak into the vocabulary
+    if tokenizer is None:
+        if tokenizer_type == "word":
+            tokenizer = SimpleTokenizer(vocab_size=vocab_size)
+        elif tokenizer_type == "bpe":
+            tokenizer = BPETokenizer(vocab_size=vocab_size)
+        else:
+            raise ValueError(f"Unknown tokenizer_type: {tokenizer_type}")
+        tokenizer.build_vocab(train_df[text_column].tolist())
+
+    # Create dataloaders. Batches group comments of similar length so they need
+    # little padding; character length is a good enough proxy for token length.
+    def make_loader(df: pd.DataFrame, reshuffle: bool) -> DataLoader:
+        dataset = ToxicCommentDataset(
+            df[text_column].tolist(),
+            df["label"].tolist(),
+            tokenizer,
+            max_seq_len=max_seq_len,
+        )
+        lengths = [len(text) if isinstance(text, str) else 0 for text in df[text_column]]
+        return DataLoader(
+            dataset,
+            batch_sampler=LengthGroupedBatchSampler(
+                lengths,
+                batch_size,
+                seed=seed,
+                reshuffle=reshuffle,
+            ),
+            collate_fn=collate_fn,
+            num_workers=num_workers,
+        )
+
+    train_loader = make_loader(train_df, reshuffle=True)
+    val_loader = make_loader(val_df, reshuffle=False)
+    test_loader = make_loader(test_df, reshuffle=False)
     
     return train_loader, val_loader, test_loader, tokenizer

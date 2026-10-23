@@ -73,6 +73,7 @@ def apply_config(args):
         val_size=args.val_size if args.val_size is not None else data_config.val_size,
         max_seq_len=args.max_seq_len if args.max_seq_len is not None else data_config.max_seq_len,
         vocab_size=args.vocab_size if args.vocab_size is not None else data_config.vocab_size,
+        tokenizer=args.tokenizer if args.tokenizer is not None else data_config.tokenizer,
         seed=args.seed if args.seed is not None else data_config.seed,
     )
     model_config = replace(
@@ -119,6 +120,7 @@ def apply_config(args):
     args.val_size = data_config.val_size
     args.max_seq_len = data_config.max_seq_len
     args.vocab_size = data_config.vocab_size
+    args.tokenizer = data_config.tokenizer
     args.seed = data_config.seed
     args.embedding_dim = model_config.embedding_dim
     args.num_layers = model_config.num_layers
@@ -205,6 +207,8 @@ def main(args):
         max_seq_len=args.max_seq_len,
         vocab_size=args.vocab_size,
         num_workers=args.num_workers,
+        tokenizer_type=args.tokenizer,
+        seed=args.seed,
     )
 
     logger.info(
@@ -214,7 +218,11 @@ def main(args):
         len(test_loader),
     )
     
-    logger.info(f"Vocabulary size: {len(tokenizer.token2id)}")
+    logger.info(f"Tokenizer: {args.tokenizer}, vocabulary size: {len(tokenizer.token2id)}")
+
+    # Save the BPE tokenizer with the run, so evaluate.py uses exactly the same one
+    if args.tokenizer == "bpe":
+        tokenizer.save(checkpoint_dir / "tokenizer.json")
     
     # Initialize model
     logger.info("Initializing model...")
@@ -376,6 +384,12 @@ if __name__ == "__main__":
         type=int,
         default=None,
         help="Vocabulary size",
+    )
+    parser.add_argument(
+        "--tokenizer",
+        choices=["word", "bpe"],
+        default=None,
+        help="Tokenizer: word-level (word) or byte-level BPE subwords (bpe)",
     )
     parser.add_argument(
         "--embedding_dim",

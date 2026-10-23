@@ -10,7 +10,7 @@ import json
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.model import ToxicCommentTransformer
-from src.data import load_civil_comments_data, create_dataloaders
+from src.data import BPETokenizer, load_civil_comments_data, create_dataloaders
 from src.trainer import Trainer, compute_pos_weight
 
 
@@ -37,6 +37,16 @@ def main(args):
         seed=args.seed,
     )
     
+    # A BPE run saves its tokenizer next to the checkpoints; reuse it. Otherwise
+    # rebuild the word vocabulary from the training split, as train.py did.
+    tokenizer = None
+    tokenizer_path = Path(args.checkpoint_path).parent / "tokenizer.json"
+    if tokenizer_path.exists():
+        print(f"Loading BPE tokenizer from {tokenizer_path}")
+        tokenizer = BPETokenizer.load(tokenizer_path)
+    else:
+        print("No tokenizer.json next to the checkpoint; rebuilding the word vocabulary")
+
     # Create dataloaders
     train_loader, val_loader, test_loader, tokenizer = create_dataloaders(
         train_df,
@@ -46,6 +56,8 @@ def main(args):
         batch_size=args.batch_size,
         max_seq_len=args.max_seq_len,
         vocab_size=args.vocab_size,
+        tokenizer=tokenizer,
+        seed=args.seed,
     )
     
     # Load model

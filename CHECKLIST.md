@@ -55,14 +55,20 @@ and F1 in the results log at the bottom.
 
 ## 5. Tokenizer and input pipeline
 
-- [ ] **Switch to a subword tokenizer.** Train a BPE or WordPiece tokenizer on
-  the training texts with the HuggingFace `tokenizers` library, or reuse
-  `bert-base-uncased`'s vocabulary. The current word tokenizer splits
-  `sh*tty` into `sh`, `tty`, and about 5% of tokens become `<UNK>`.
 - [x] **Pad each batch to its own longest sequence** instead of always to 256.
   The median comment is 36 tokens (99th percentile 181), so most of the
   compute is currently spent on padding. Do the padding in `collate_fn`.
-- [x] **Lower `max_seq_len`** to ~192, which still covers 99% of comments.
+- [x] **Group batches by length** (`LengthGroupedBatchSampler` in `src/data.py`).
+  Random batches still pad to ~175 tokens; grouped batches pad to ~1% above
+  the real length. Word-tokenizer epoch: 38 min → ~18 min.
+- [x] **Implement a subword tokenizer:** byte-level BPE (`BPETokenizer` in
+  `src/data.py`), trained on the training split, selected with
+  `--tokenizer bpe` and saved as `tokenizer.json` in the run folder.
+- [ ] **Run the BPE experiment** on the full data with the same settings as the
+  step 3 run (lr 5e-4, 4 epochs, vocab 10,000) and compare.
+- [x] **`max_seq_len`: keep 256.** With word tokens 192 would cover 99%, but BPE
+  tokens are ~35% longer (99th percentile 248), so 192 would truncate 7.8% of
+  comments. 256 covers 99.5% with BPE.
 
 ## 6. Labels and loss
 
@@ -87,7 +93,9 @@ and F1 in the results log at the bottom.
 - [ ] **Fix AMP on Apple Silicon:** `torch.cuda.amp` doesn't work on MPS. Use
   `torch.autocast(device_type=...)`, or disable `use_amp` on MPS.
 - [ ] **Remove the unused `compute_class_weights`** call in `scripts/train.py`
-  (and the function, if nothing else uses it).
+  (and the function, if nothing else uses it). Its test,
+  `tests/test_class_weights.py`, already fails: it asserts `neg / (total / 2)`
+  instead of `total / (2 * neg)`. Remove it together with the function.
 - [ ] **Keep the padding embedding at zero:** the custom init in
   `ToxicCommentTransformer._init_weights` overwrites the `padding_idx` row.
 - [ ] **Fix the README:** the learning rate is listed as `1e-7`, and the

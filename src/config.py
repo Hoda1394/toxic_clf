@@ -17,6 +17,7 @@ class DataConfig:
     val_size: float = 0.1
     max_seq_len: int = 256
     vocab_size: int = 10000
+    tokenizer: str = "word"
     seed: int = 42
 
 
