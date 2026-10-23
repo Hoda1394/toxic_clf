@@ -59,10 +59,10 @@ and F1 in the results log at the bottom.
   the training texts with the HuggingFace `tokenizers` library, or reuse
   `bert-base-uncased`'s vocabulary. The current word tokenizer splits
   `sh*tty` into `sh`, `tty`, and about 5% of tokens become `<UNK>`.
-- [ ] **Pad each batch to its own longest sequence** instead of always to 256.
+- [x] **Pad each batch to its own longest sequence** instead of always to 256.
   The median comment is 36 tokens (99th percentile 181), so most of the
   compute is currently spent on padding. Do the padding in `collate_fn`.
-- [ ] **Lower `max_seq_len`** to ~192, which still covers 99% of comments.
+- [x] **Lower `max_seq_len`** to ~192, which still covers 99% of comments.
 
 ## 6. Labels and loss
 

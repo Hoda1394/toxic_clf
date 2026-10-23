@@ -5,6 +5,7 @@ import pandas as pd
 import numpy as np
 from typing import Tuple, Dict, Optional
 from torch.utils.data import Dataset, DataLoader
+from torch.nn.utils.rnn import pad_sequence
 from sklearn.model_selection import train_test_split
 from collections import Counter
 import re
@@ -150,34 +151,35 @@ class ToxicCommentDataset(Dataset):
         if len(input_ids) == 0:
             input_ids = [self.tokenizer.token2id["<UNK>"]]
 
-        # Create attention mask (1 for valid tokens, 0 for padding)
-        attention_mask = [1] * len(input_ids)
-
-        # Pad to max_seq_len
-        padding_len = self.max_seq_len - len(input_ids)
-        input_ids = input_ids + [0] * padding_len
-        attention_mask = attention_mask + [0] * padding_len
-        
+        # No padding here: collate_fn pads each batch to its own longest sequence
         return {
             "input_ids": torch.tensor(input_ids, dtype=torch.long),
-            "attention_mask": torch.tensor(attention_mask, dtype=torch.long),
             "label": torch.tensor(label, dtype=torch.float),
         }
 
 
 def collate_fn(batch: list) -> Dict:
     """Collate function for DataLoader.
-    
+
+    Pads every sequence to the longest one in this batch (not to max_seq_len),
+    so short comments don't pay for padding they don't need.
+
     Args:
         batch: List of samples from dataset
-    
+
     Returns:
         Batched tensor dictionary
     """
-    input_ids = torch.stack([item["input_ids"] for item in batch])
-    attention_mask = torch.stack([item["attention_mask"] for item in batch])
+    sequences = [item["input_ids"] for item in batch]
+    lengths = torch.tensor([len(seq) for seq in sequences])
+
+    input_ids = pad_sequence(sequences, batch_first=True, padding_value=0)
+
+    # 1 for real tokens, 0 for padding
+    attention_mask = (torch.arange(input_ids.size(1)) < lengths.unsqueeze(1)).long()
+
     labels = torch.stack([item["label"] for item in batch])
-    
+
     return {
         "input_ids": input_ids,
         "attention_mask": attention_mask,
