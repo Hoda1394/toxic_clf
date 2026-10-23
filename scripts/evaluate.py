@@ -11,7 +11,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.model import ToxicCommentTransformer
 from src.data import load_civil_comments_data, create_dataloaders
-from src.trainer import Trainer
+from src.trainer import Trainer, compute_pos_weight
 
 
 def main(args):
@@ -64,8 +64,9 @@ def main(args):
     model.load_state_dict(checkpoint["model_state_dict"])
     model = model.to(device)
     
-    # Loss function
-    loss_fn = nn.BCEWithLogitsLoss()
+    # Loss function: same pos_weight as training, so the loss matches the training log
+    pos_weight = compute_pos_weight(train_df["label"].values).to(device)
+    loss_fn = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
     
     # Create trainer for evaluation
     dummy_optimizer = torch.optim.Adam(model.parameters())
@@ -73,7 +74,15 @@ def main(args):
     
     # Evaluate
     print("Evaluating on test set...")
-    test_loss, test_metrics = trainer.evaluate(test_loader, loss_fn)
+    # Use the threshold tuned during training, unless one is given explicitly
+    threshold = args.threshold if args.threshold is not None else checkpoint.get("threshold", 0.5)
+    print(f"Using threshold: {threshold:.4f}")
+    test_loss, test_metrics = trainer.evaluate(
+        test_loader,
+        loss_fn,
+        max_batches=args.max_test_batches,
+        threshold=threshold,
+    )
     
     print(f"Test loss: {test_loss:.4f}")
     print(f"Test metrics: {test_metrics}")
@@ -83,6 +92,7 @@ def main(args):
         results = {
             "loss": test_loss,
             "metrics": test_metrics,
+            "threshold": threshold,
         }
         with open(args.output_path, "w") as f:
             json.dump(results, f, indent=2)
@@ -176,6 +186,18 @@ if __name__ == "__main__":
         "--seed",
         type=int,
         default=42,
+    )
+    parser.add_argument(
+        "--threshold",
+        type=float,
+        default=None,
+        help="Decision threshold (default: the one saved in the checkpoint, else 0.5)",
+    )
+    parser.add_argument(
+        "--max_test_batches",
+        type=int,
+        default=None,
+        help="Maximum test batches to evaluate (useful for quick checks)",
     )
     
     args = parser.parse_args()

@@ -18,9 +18,11 @@ from src.model import ToxicCommentTransformer
 from src.data import load_civil_comments_data, create_dataloaders
 from src.trainer import (
     Trainer, 
-    compute_class_weights, 
-    compute_pos_weight, 
-    get_warmup_cosine_schedule
+    compute_class_weights,
+    compute_metrics, 
+    compute_pos_weight,
+    find_best_threshold, 
+    get_warmup_cosine_schedule,
 )
 from src.config import (
     AGGRESSIVE_TRAINING,
@@ -289,16 +291,35 @@ def main(args):
     )
     
     logger.info("Training completed!")
-    
-    # Final evaluation on test set
+
+    # Tune the decision threshold on validation (best checkpoint is already restored)
+    logger.info("Tuning decision threshold on validation set...")
+    _, val_probs, val_labels = trainer.predict(
+        val_loader,
+        loss_fn,
+        max_batches=args.max_val_batches,
+    )
+    threshold = find_best_threshold(val_labels, val_probs)
+    logger.info(f"Best validation threshold: {threshold:.4f}")
+    logger.info(f"Val metrics at tuned threshold: {compute_metrics(val_labels, val_probs, threshold)}")
+
+    # Save the threshold with the best checkpoint so evaluate.py can reuse it
+    if "best_epoch" in history:
+        best_checkpoint_path = Path(args.checkpoint_dir) / f"model_epoch_{history['best_epoch']}.pt"
+        checkpoint = torch.load(best_checkpoint_path, map_location="cpu")
+        checkpoint["threshold"] = threshold
+        torch.save(checkpoint, best_checkpoint_path)
+
+    # Final evaluation on test set, at the default and the tuned threshold
     logger.info("Evaluating on test set...")
-    test_loss, test_metrics = trainer.evaluate(
+    test_loss, test_probs, test_labels = trainer.predict(
         test_loader,
         loss_fn,
         max_batches=args.max_test_batches,
     )
     logger.info(f"Test loss: {test_loss:.4f}")
-    logger.info(f"Test metrics: {test_metrics}")
+    logger.info(f"Test metrics at 0.5: {compute_metrics(test_labels, test_probs, 0.5)}")
+    logger.info(f"Test metrics at tuned threshold {threshold:.4f}: {compute_metrics(test_labels, test_probs, threshold)}")
     if trainer.summary_writer is not None:
         trainer.summary_writer.close()
 

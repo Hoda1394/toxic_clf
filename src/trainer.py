@@ -11,6 +11,7 @@ from sklearn.metrics import (
     accuracy_score,
     average_precision_score,
     f1_score,
+    precision_recall_curve,
     precision_score,
     recall_score,
     roc_auc_score,)
@@ -156,21 +157,21 @@ class Trainer:
         return avg_loss
     
     @torch.no_grad()
-    def evaluate(
+    def predict(
         self,
-        val_loader: DataLoader,
+        loader: DataLoader,
         loss_fn: nn.Module,
         max_batches: int = None,
-    ) -> Tuple[float, Dict]:
-        """Evaluate model.
+    ) -> Tuple[float, np.ndarray, np.ndarray]:
+        """Run the model over a dataloader.
         
         Args:
-            val_loader: Validation dataloader
+            loader: Dataloader
             loss_fn: Loss function
             max_batches: Optional maximum number of batches to process
         
         Returns:
-            Tuple of (average loss, metrics dict)
+            Tuple of (average loss, predicted probabilities, true labels)
         """
         self.model.eval()
         total_loss = 0.0
@@ -178,7 +179,7 @@ class Trainer:
         all_labels = []
         
         progress_bar = tqdm(
-            val_loader,
+            loader,
             desc="Evaluating",
             disable=False,
         )
@@ -204,26 +205,31 @@ class Trainer:
             all_labels.extend(labels.cpu().numpy().astype(int))
             
             progress_bar.set_postfix({"loss": loss.item()})
-        
-        # Calculate metrics
-        all_probs = np.array(all_probs)
-        all_labels = np.array(all_labels)
-        all_preds = (all_probs >= 0.5).astype(int)
 
-        # AUC metrics need both classes present (not guaranteed with tiny max_batches)
-        has_both_classes = len(np.unique(all_labels)) == 2
-        
-        metrics = {
-            "accuracy": float(accuracy_score(all_labels, all_preds)),
-            "precision": float(precision_score(all_labels, all_preds, zero_division=0)),
-            "recall": float(recall_score(all_labels, all_preds, zero_division=0)),
-            "f1": float(f1_score(all_labels, all_preds, zero_division=0)),
-            "roc_auc": float(roc_auc_score(all_labels, all_probs)) if has_both_classes else float("nan"),
-            "pr_auc": float(average_precision_score(all_labels, all_probs)) if has_both_classes else float("nan"),
-        }
-        
         avg_loss = total_loss / processed_batches if processed_batches else 0.0
-        return avg_loss, metrics
+        return avg_loss, np.array(all_probs), np.array(all_labels)
+
+    def evaluate(
+        self,
+        loader: DataLoader,
+        loss_fn: nn.Module,
+        max_batches: int = None,
+        threshold: float = 0.5,
+    ) -> Tuple[float, Dict]:
+        """Evaluate model.
+        
+        Args:
+            loader: Dataloader to evaluate on
+            loss_fn: Loss function
+            max_batches: Optional maximum number of batches to process
+            threshold: Probability threshold for the thresholded metrics (precision, recall, F1)
+
+        Returns:
+            Tuple of (average loss, metrics dict)
+        """
+        avg_loss, probs, labels = self.predict(loader, loss_fn, max_batches)
+        return avg_loss, compute_metrics(labels, probs, threshold)
+        
     
     def train(
         self,
@@ -415,3 +421,28 @@ def get_warmup_cosine_schedule(
         return 0.5 * (1.0 + math.cos(math.pi * min(progress, 1.0)))
 
     return LambdaLR(optimizer, lr_lambda)
+
+
+def compute_metrics(labels: np.ndarray, probs: np.ndarray, threshold: float = 0.5) -> Dict:
+    """Compute threshold-free (AUC) and thresholded metrics from probabilities."""
+    preds = (probs >= threshold).astype(int)
+
+    # AUC metrics need both classes present (not guaranteed with tiny max_batches)
+    has_both_classes = len(np.unique(labels)) == 2
+
+    return {
+        "accuracy": float(accuracy_score(labels, preds)),
+        "precision": float(precision_score(labels, preds, zero_division=0)),
+        "recall": float(recall_score(labels, preds, zero_division=0)),
+        "f1": float(f1_score(labels, preds, zero_division=0)),
+        "roc_auc": float(roc_auc_score(labels, probs)) if has_both_classes else float("nan"),
+        "pr_auc": float(average_precision_score(labels, probs)) if has_both_classes else float("nan"),
+    }
+
+
+def find_best_threshold(labels: np.ndarray, probs: np.ndarray) -> float:
+    """Return the probability threshold that maximizes F1."""
+    precision, recall, thresholds = precision_recall_curve(labels, probs)
+    f1 = 2 * precision * recall / (precision + recall + 1e-9)
+    # The last precision/recall pair has no matching threshold
+    return float(thresholds[f1[:-1].argmax()])

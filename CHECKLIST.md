@@ -40,12 +40,12 @@ and F1 in the results log at the bottom.
 
 ## 4. Evaluation and model selection
 
-- [ ] **Add ROC-AUC and PR-AUC** to `Trainer.evaluate` (`src/trainer.py`), using
+- [x] **Add ROC-AUC and PR-AUC** to `Trainer.evaluate` (`src/trainer.py`), using
   `sklearn.metrics.roc_auc_score` and `average_precision_score`. Collect the
   probabilities, not just the 0/1 predictions.
-- [ ] **Select checkpoints and early-stop on PR-AUC** instead of F1 at 0.5. It is
+- [x] **Select checkpoints and early-stop on PR-AUC** instead of F1 at 0.5. It is
   much less noisy from epoch to epoch.
-- [ ] **Tune the decision threshold on validation** after training, and apply
+- [x] **Tune the decision threshold on validation** after training, and apply
   that threshold to the test set (`scripts/train.py` and `scripts/evaluate.py`).
 - [ ] **Use the official labelled hold-out set** (`data/test_public_expanded.csv`
   or `data/test_private_expanded.csv`) as the final test set instead of a
