@@ -75,7 +75,7 @@ and F1 in the results log at the bottom.
 - [x] **Implement `--no_pos_weight`.** With threshold tuning in place,
   the class weighting may no longer be needed, and without it the predicted
   probabilities are better calibrated.
-- [ ] **Run the `--no_pos_weight` experiment** with the same settings as the step 6
+- [x] **Run the `--no_pos_weight` experiment** with the same settings as the step 6
   soft-label run (`--tokenizer bpe --soft_labels`, lr 5e-4, 4 epochs) and compare.
 - [x] **Implement soft labels:** use the continuous `target` score (0–1) as the
   BCE target instead of the 0/1 label, and keep the 0/1 label for metrics.
@@ -118,3 +118,4 @@ and F1 in the results log at the bottom.
 | 3 | Warmup (5%) + cosine decay, peak lr 5e-4, 4 epochs | 0.694 | 0.632 | 0.696 | 0.634 | run `2026-10-16_13-41-27`; best epoch 4; F1 at 0.5: 0.617 test; tuned threshold 0.80; ROC-AUC 0.936 test; train loss 0.78 → 0.61, val loss rose after epoch 2 |
 | 5 | BPE tokenizer (vocab 10k), length-grouped batches; otherwise as step 3 | 0.701 | 0.637 | 0.698 | 0.634 | run `2026-10-23_11-12-45`; best epoch 4 (PR-AUC equal to epoch 3: 0.7009); F1 at 0.5: 0.625 test; tuned threshold 0.74; ROC-AUC 0.939 test; ~19 min/epoch; train loss 0.79 → 0.59, val loss 0.74 → 0.92 |
 | 6 | Soft labels (`target` score as BCE target), BPE; otherwise as step 5 | 0.710 | 0.645 | 0.707 | 0.639 | run `2026-10-23_12-59-30`; best epoch 4; ROC-AUC 0.946 test; tuned threshold 0.86; F1 at 0.5 only 0.414 (pos_weight × soft targets inflates probabilities); val loss flat ~0.99–1.00, no longer rising |
+| 6 | No `pos_weight` (unweighted loss), soft labels, BPE; otherwise as above | 0.717 | 0.649 | 0.715 | 0.644 | run `2026-10-23_14-41-47`; best epoch 3 (epoch 4 equal: 0.7171); ROC-AUC 0.948 test; tuned threshold 0.35; F1 at 0.5: 0.572 test; train loss 0.234 vs val loss 0.242 (tiny gap) |
