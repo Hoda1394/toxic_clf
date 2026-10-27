@@ -91,9 +91,17 @@ and F1 in the results log at the bottom.
 - [x] **Train a larger model** once steps 2–5 are done: e.g. 4 layers,
   `embedding_dim` 256, `dim_feedforward` 1024 (the `medium` preset), roughly
   5–10M parameters. 1.26M training examples is plenty for this size.
-- [ ] **Fine-tune a small pretrained model** (DistilBERT or MiniLM) on the same
-  split as a reference for what is achievable (expect roughly 0.70 F1). The gap
-  to your from-scratch model is a lesson in itself.
+- [x] **Implement fine-tuning of a small pretrained model**
+  (`scripts/finetune_pretrained.py`, DistilBERT by default). Same split,
+  length-grouped batches, `Trainer`, PR-AUC checkpoint selection and threshold
+  tuning as `scripts/train.py`; soft labels, no `pos_weight`, AdamW lr 2e-5,
+  weight decay 0.01, 2 epochs, 200k-row training subset. Smoke test passed
+  (run `smoke/2026-10-27_09-27-03`, 2k rows): 67M params, ~2.4 steps/s on MPS
+  at batch 32, so ~45 min per 200k-row epoch, ~12 min per validation pass and
+  ~25 min for the test set. Each checkpoint is ~800 MB.
+- [ ] **Run the DistilBERT fine-tuning** on 200k training rows, 2 epochs
+  (~2.5 h in total) as a reference for what is achievable (expect roughly
+  0.70 F1). The gap to your from-scratch model is a lesson in itself.
 
 ## 8. Clean-up
 
