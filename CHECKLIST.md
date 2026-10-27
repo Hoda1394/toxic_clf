@@ -88,7 +88,7 @@ and F1 in the results log at the bottom.
 
 ## 7. Scale up
 
-- [ ] **Train a larger model** once steps 2–5 are done: e.g. 4 layers,
+- [x] **Train a larger model** once steps 2–5 are done: e.g. 4 layers,
   `embedding_dim` 256, `dim_feedforward` 1024 (the `medium` preset), roughly
   5–10M parameters. 1.26M training examples is plenty for this size.
 - [ ] **Fine-tune a small pretrained model** (DistilBERT or MiniLM) on the same
@@ -119,3 +119,4 @@ and F1 in the results log at the bottom.
 | 5 | BPE tokenizer (vocab 10k), length-grouped batches; otherwise as step 3 | 0.701 | 0.637 | 0.698 | 0.634 | run `2026-10-23_11-12-45`; best epoch 4 (PR-AUC equal to epoch 3: 0.7009); F1 at 0.5: 0.625 test; tuned threshold 0.74; ROC-AUC 0.939 test; ~19 min/epoch; train loss 0.79 → 0.59, val loss 0.74 → 0.92 |
 | 6 | Soft labels (`target` score as BCE target), BPE; otherwise as step 5 | 0.710 | 0.645 | 0.707 | 0.639 | run `2026-10-23_12-59-30`; best epoch 4; ROC-AUC 0.946 test; tuned threshold 0.86; F1 at 0.5 only 0.414 (pos_weight × soft targets inflates probabilities); val loss flat ~0.99–1.00, no longer rising |
 | 6 | No `pos_weight` (unweighted loss), soft labels, BPE; otherwise as above | 0.717 | 0.649 | 0.715 | 0.644 | run `2026-10-23_14-41-47`; best epoch 3 (epoch 4 equal: 0.7171); ROC-AUC 0.948 test; tuned threshold 0.35; F1 at 0.5: 0.572 test; train loss 0.234 vs val loss 0.242 (tiny gap) |
+| 7 | Larger model: 256-dim, 4 layers, 8 heads, FF 1024 (5.8M params), lr 3e-4; soft labels, no pos_weight, BPE | 0.718 | 0.652 | 0.716 | 0.646 | run `2026-10-26_10-42-26`; best epoch 3; ROC-AUC 0.948 test; tuned threshold 0.32; ~41 min/epoch (2.2× slower); gain over 1.9M model within noise; train loss 0.232 vs loss floor 0.161 |
