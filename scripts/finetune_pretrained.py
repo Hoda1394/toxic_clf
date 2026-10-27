@@ -92,6 +92,7 @@ def make_loader(
             padding=True,
             truncation=True,
             max_length=args.max_seq_len,
+            pad_to_multiple_of=args.pad_to_multiple_of,
             return_tensors="pt",
         )
         return {
@@ -275,7 +276,19 @@ if __name__ == "__main__":
         help="Hugging Face model name",
     )
     parser.add_argument("--max_seq_len", type=int, default=256)
-    parser.add_argument("--batch_size", type=int, default=32)
+    parser.add_argument(
+        "--batch_size",
+        type=int,
+        default=16,
+        help="16 fits a 24 GB Mac; 32 runs out of MPS memory on long batches",
+    )
+    parser.add_argument(
+        "--pad_to_multiple_of",
+        type=int,
+        default=64,
+        help="Round padded lengths up to a multiple of this, so MPS sees only a few batch shapes "
+        "(every new shape makes it cache more buffers)",
+    )
     parser.add_argument(
         "--learning_rate",
         type=float,

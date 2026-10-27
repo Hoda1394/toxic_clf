@@ -95,12 +95,18 @@ and F1 in the results log at the bottom.
   (`scripts/finetune_pretrained.py`, DistilBERT by default). Same split,
   length-grouped batches, `Trainer`, PR-AUC checkpoint selection and threshold
   tuning as `scripts/train.py`; soft labels, no `pos_weight`, AdamW lr 2e-5,
-  weight decay 0.01, 2 epochs, 200k-row training subset. Smoke test passed
-  (run `smoke/2026-10-27_09-27-03`, 2k rows): 67M params, ~2.4 steps/s on MPS
-  at batch 32, so ~45 min per 200k-row epoch, ~12 min per validation pass and
-  ~25 min for the test set. Each checkpoint is ~800 MB.
-- [ ] **Run the DistilBERT fine-tuning** on 200k training rows, 2 epochs
-  (~2.5 h in total) as a reference for what is achievable (expect roughly
+  weight decay 0.01, 2 epochs, 200k-row training subset, batch 16, 67M params.
+  Each checkpoint is ~800 MB.
+  - **MPS out-of-memory fix:** the first full run (batch 32) crashed at
+    ~step 400 with 13 GiB allocated + 17 GiB cached. Cause: every new batch
+    length makes MPS cache more buffers. Padding to a multiple of 64
+    (`--pad_to_multiple_of`, only 4 shapes) fixes it: with fixed shapes the
+    peak is 4.6 GiB at batch 16 and 7.6 GiB at batch 32. Batch 16 kept for headroom.
+  - Smoke test after the fix (10k rows, 625 steps): 4.2 steps/s, so ~50 min per
+    200k-row epoch, ~12 min per validation pass, ~25 min for the test set.
+    Already test PR-AUC 0.72 / F1 0.64 (on 2k test rows, noisy).
+- [x] **Run the DistilBERT fine-tuning** on 200k training rows, 2 epochs
+  (2.6 h in total, run `pretrained/2026-10-27_09-59-17`) as a reference for what is achievable (expect roughly
   0.70 F1). The gap to your from-scratch model is a lesson in itself.
 
 ## 8. Clean-up
@@ -128,3 +134,4 @@ and F1 in the results log at the bottom.
 | 6 | Soft labels (`target` score as BCE target), BPE; otherwise as step 5 | 0.710 | 0.645 | 0.707 | 0.639 | run `2026-10-23_12-59-30`; best epoch 4; ROC-AUC 0.946 test; tuned threshold 0.86; F1 at 0.5 only 0.414 (pos_weight × soft targets inflates probabilities); val loss flat ~0.99–1.00, no longer rising |
 | 6 | No `pos_weight` (unweighted loss), soft labels, BPE; otherwise as above | 0.717 | 0.649 | 0.715 | 0.644 | run `2026-10-23_14-41-47`; best epoch 3 (epoch 4 equal: 0.7171); ROC-AUC 0.948 test; tuned threshold 0.35; F1 at 0.5: 0.572 test; train loss 0.234 vs val loss 0.242 (tiny gap) |
 | 7 | Larger model: 256-dim, 4 layers, 8 heads, FF 1024 (5.8M params), lr 3e-4; soft labels, no pos_weight, BPE | 0.718 | 0.652 | 0.716 | 0.646 | run `2026-10-26_10-42-26`; best epoch 3; ROC-AUC 0.948 test; tuned threshold 0.32; ~41 min/epoch (2.2× slower); gain over 1.9M model within noise; train loss 0.232 vs loss floor 0.161 |
+| 7 | DistilBERT fine-tuned (67M params, pretrained), 200k training rows, 2 epochs, lr 2e-5, batch 16; soft labels, no pos_weight | 0.782 | 0.693 | 0.780 | 0.694 | run `pretrained/2026-10-27_09-59-17`; best epoch 2 (epoch 1: 0.772, still improving); ROC-AUC 0.966 test; tuned threshold 0.44; F1 at 0.5: 0.676 test; train loss 0.220 vs val loss 0.231; ~49 min/epoch; +0.064 PR-AUC / +0.048 F1 over the best from-scratch model with 1/6 of the data |
