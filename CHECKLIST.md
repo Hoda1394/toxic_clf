@@ -50,8 +50,18 @@ and F1 in the results log at the bottom.
 - [ ] **Use the official labelled hold-out set** (`data/test_public_expanded.csv`
   or `data/test_private_expanded.csv`) as the final test set instead of a
   random split of `train.csv`. Check its column names first.
-- [ ] **Remove texts duplicated between the splits.** About 1.7% of validation
-  texts also appear in the training set.
+  Checked: columns are `comment_text` / `toxicity` (not `text` / `target`),
+  97,320 rows each, 8% toxic. ~1.6% of their texts also appear in `train.csv`,
+  so remove those with the same normalisation as `--dedup`.
+- [x] **Remove texts duplicated between the splits** (`--dedup` in all four
+  scripts; `deduplicate_texts` in `src/data.py`). Texts are compared after
+  lowercasing and collapsing whitespace (both tokenizers lowercase, so these
+  look identical to the models). Each group becomes one row with the mean
+  `target`, which also settles the 808 groups whose copies have conflicting
+  0/1 labels. Removes 28,354 rows (1.6%), mostly short replies ("Well said.",
+  "No.") and repeated spam. Overlap before → after: val∩train 2,637 → 0,
+  test∩train 4,622 → 0. The split changes with `--dedup`, so earlier runs are
+  not directly comparable; without the flag the old split is unchanged.
 
 ## 5. Tokenizer and input pipeline
 

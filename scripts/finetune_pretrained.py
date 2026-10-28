@@ -160,6 +160,7 @@ def main(args):
         test_size=args.test_size,
         val_size=args.val_size,
         seed=args.seed,
+        dedup=args.dedup,
     )
     train_df = subsample(train_df, args.max_train_samples, args.seed)
     val_df = subsample(val_df, args.max_val_samples, args.seed)
@@ -260,6 +261,11 @@ if __name__ == "__main__":
         type=int,
         default=None,
         help="Random subset of the test split (default: all)",
+    )
+    parser.add_argument(
+        "--dedup",
+        action="store_true",
+        help="Collapse duplicate texts before splitting",
     )
     parser.add_argument(
         "--soft_labels",

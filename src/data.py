@@ -12,6 +12,9 @@ from torch.nn.utils.rnn import pad_sequence
 from sklearn.model_selection import train_test_split
 from collections import Counter
 import re
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class SimpleTokenizer:
@@ -321,6 +324,25 @@ class LengthGroupedBatchSampler(Sampler):
         return math.ceil(len(self.lengths) / self.batch_size)
 
 
+def normalize_for_dedup(texts: pd.Series) -> pd.Series:
+    """Lowercase and collapse whitespace: texts equal after this look the same to the tokenizers."""
+    return texts.str.lower().str.split().str.join(" ")
+
+
+def deduplicate_texts(df: pd.DataFrame, text_column: str, target_column: str) -> pd.DataFrame:
+    """Collapse rows with the same (normalised) text into one row.
+
+    The kept row gets the mean target of its group, which also resolves copies
+    with conflicting labels. Without this, copies of the same text can land in
+    different splits and inflate validation/test scores.
+    """
+    key = normalize_for_dedup(df[text_column])
+    mean_target = df.groupby(key)[target_column].transform("mean")
+    df = df.assign(**{target_column: mean_target})[~key.duplicated()].copy()
+    df["label"] = (df[target_column] >= 0.5).astype(int)
+    return df
+
+
 def load_civil_comments_data(
     csv_path: str,
     text_column: str = "text",
@@ -328,9 +350,10 @@ def load_civil_comments_data(
     test_size: float = 0.2,
     val_size: float = 0.1,
     seed: int = 42,
+    dedup: bool = False,
 ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """Load and split Civil Comments dataset.
-    
+
     Args:
         csv_path: Path to CSV file
         text_column: Name of text column
@@ -338,18 +361,24 @@ def load_civil_comments_data(
         test_size: Test set proportion
         val_size: Validation set proportion (of remaining data)
         seed: Random seed
-    
+        dedup: Collapse duplicate texts before splitting (see deduplicate_texts)
+
     Returns:
         Tuple of (train_df, val_df, test_df)
     """
     df = pd.read_csv(csv_path)
-    
+
     # Create binary labels (>= 0.5 is toxic)
     df["label"] = (df[target_column] >= 0.5).astype(int)
-    
+
     # Remove rows with missing text or labels
     df = df.dropna(subset=[text_column, "label"])
-    
+
+    if dedup:
+        num_rows = len(df)
+        df = deduplicate_texts(df, text_column, target_column)
+        logger.info(f"Removed {num_rows - len(df)} duplicate texts ({len(df)} rows left)")
+
     # First split: train+val vs test
     train_val_df, test_df = train_test_split(
         df,

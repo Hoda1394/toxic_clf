@@ -19,6 +19,7 @@ class DataConfig:
     vocab_size: int = 10000
     tokenizer: str = "word"
     soft_labels: bool = False
+    dedup: bool = False
     seed: int = 42
 
 

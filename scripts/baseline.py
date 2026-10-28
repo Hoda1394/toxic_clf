@@ -60,6 +60,7 @@ def main(args):
         test_size=args.test_size,
         val_size=args.val_size,
         seed=args.seed,
+        dedup=args.dedup,
     )
 
     if args.max_train_samples is not None and args.max_train_samples < len(train_df):
@@ -131,6 +132,11 @@ if __name__ == "__main__":
     parser.add_argument("--test_size", type=float, default=0.2)
     parser.add_argument("--val_size", type=float, default=0.1)
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument(
+        "--dedup",
+        action="store_true",
+        help="Collapse duplicate texts before splitting",
+    )
 
     # Baseline arguments
     parser.add_argument(

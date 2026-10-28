@@ -75,6 +75,7 @@ def apply_config(args):
         vocab_size=args.vocab_size if args.vocab_size is not None else data_config.vocab_size,
         tokenizer=args.tokenizer if args.tokenizer is not None else data_config.tokenizer,
         soft_labels=args.soft_labels if args.soft_labels is not None else data_config.soft_labels,
+        dedup=args.dedup if args.dedup is not None else data_config.dedup,
         seed=args.seed if args.seed is not None else data_config.seed,
     )
     model_config = replace(
@@ -128,6 +129,7 @@ def apply_config(args):
     args.vocab_size = data_config.vocab_size
     args.tokenizer = data_config.tokenizer
     args.soft_labels = data_config.soft_labels
+    args.dedup = data_config.dedup
     args.seed = data_config.seed
     args.embedding_dim = model_config.embedding_dim
     args.num_layers = model_config.num_layers
@@ -195,6 +197,7 @@ def main(args):
         test_size=args.test_size,
         val_size=args.val_size,
         seed=args.seed,
+        dedup=args.dedup,
     )
     
     logger.info(f"Train set size: {len(train_df)}")
@@ -415,6 +418,12 @@ if __name__ == "__main__":
         action="store_true",
         default=None,
         help="Train on the soft toxicity score (target column) instead of the 0/1 label",
+    )
+    parser.add_argument(
+        "--dedup",
+        action="store_true",
+        default=None,
+        help="Collapse duplicate texts (case/whitespace-insensitive) before splitting",
     )
     parser.add_argument(
         "--embedding_dim",

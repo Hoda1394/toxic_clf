@@ -35,6 +35,7 @@ def main(args):
         test_size=args.test_size,
         val_size=args.val_size,
         seed=args.seed,
+        dedup=args.dedup,
     )
     
     # A BPE run saves its tokenizer next to the checkpoints; reuse it. Otherwise
@@ -210,6 +211,11 @@ if __name__ == "__main__":
         "--soft_labels",
         action="store_true",
         help="Compute the loss on soft targets, as in a --soft_labels training run (metrics are unaffected)",
+    )
+    parser.add_argument(
+        "--dedup",
+        action="store_true",
+        help="Collapse duplicate texts before splitting, as in a --dedup training run (changes the split)",
     )
     parser.add_argument(
         "--no_pos_weight",
