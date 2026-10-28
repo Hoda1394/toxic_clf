@@ -76,6 +76,7 @@ def apply_config(args):
         tokenizer=args.tokenizer if args.tokenizer is not None else data_config.tokenizer,
         soft_labels=args.soft_labels if args.soft_labels is not None else data_config.soft_labels,
         dedup=args.dedup if args.dedup is not None else data_config.dedup,
+        official_test=args.official_test if args.official_test is not None else data_config.official_test,
         seed=args.seed if args.seed is not None else data_config.seed,
     )
     model_config = replace(
@@ -130,6 +131,7 @@ def apply_config(args):
     args.tokenizer = data_config.tokenizer
     args.soft_labels = data_config.soft_labels
     args.dedup = data_config.dedup
+    args.official_test = data_config.official_test
     args.seed = data_config.seed
     args.embedding_dim = model_config.embedding_dim
     args.num_layers = model_config.num_layers
@@ -198,6 +200,7 @@ def main(args):
         val_size=args.val_size,
         seed=args.seed,
         dedup=args.dedup,
+        official_test=args.official_test,
     )
     
     logger.info(f"Train set size: {len(train_df)}")
@@ -424,6 +427,12 @@ if __name__ == "__main__":
         action="store_true",
         default=None,
         help="Collapse duplicate texts (case/whitespace-insensitive) before splitting",
+    )
+    parser.add_argument(
+        "--official_test",
+        action="store_true",
+        default=None,
+        help="Test on the official hold-out set (test_public/private_expanded.csv); the CSV is split into train/val only",
     )
     parser.add_argument(
         "--embedding_dim",

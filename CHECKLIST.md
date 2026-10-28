@@ -47,12 +47,28 @@ and F1 in the results log at the bottom.
   much less noisy from epoch to epoch.
 - [x] **Tune the decision threshold on validation** after training, and apply
   that threshold to the test set (`scripts/train.py` and `scripts/evaluate.py`).
-- [ ] **Use the official labelled hold-out set** (`data/test_public_expanded.csv`
-  or `data/test_private_expanded.csv`) as the final test set instead of a
-  random split of `train.csv`. Check its column names first.
-  Checked: columns are `comment_text` / `toxicity` (not `text` / `target`),
-  97,320 rows each, 8% toxic. ~1.6% of their texts also appear in `train.csv`,
-  so remove those with the same normalisation as `--dedup`.
+- [x] **Use the official labelled hold-out set** as the final test set instead
+  of a random split of `train.csv` (`--official_test` in all four scripts;
+  `load_official_test_data` in `src/data.py`). Public + private sets combined
+  (2 × 97,320 rows, columns `comment_text` / `toxicity` renamed to `text` /
+  `target`). The 3,485 texts that also appear in `train.csv` are removed, so the
+  test set is clean for every model trained on any part of `train.csv`,
+  including earlier checkpoints. `train.csv` is then split into train/val only
+  (`--val_size` of the whole CSV):
+
+  | | Train | Val | Test |
+  |---|---|---|---|
+  | `--official_test` | 1,624,383 | 180,488 | 191,155 |
+  | `--official_test --dedup` | 1,598,865 | 177,652 | 190,516 |
+
+  `finetune_pretrained.py` now saves the tuned threshold in the best checkpoint
+  and has `--eval_checkpoint` to evaluate an earlier run without training.
+  Caveat: `evaluate.py` on old *word-tokenizer* checkpoints rebuilds the
+  vocabulary from the (now larger) train split, so it no longer matches;
+  BPE checkpoints load their saved `tokenizer.json` and are fine.
+- [ ] **Final numbers on the official test set:** evaluate the existing best
+  checkpoints (step 6 small, step 7 larger, DistilBERT), then retrain the best
+  small configuration once with `--official_test --dedup`.
 - [x] **Remove texts duplicated between the splits** (`--dedup` in all four
   scripts; `deduplicate_texts` in `src/data.py`). Texts are compared after
   lowercasing and collapsing whitespace (both tokenizers lowercase, so these

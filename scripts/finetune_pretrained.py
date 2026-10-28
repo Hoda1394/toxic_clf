@@ -161,6 +161,7 @@ def main(args):
         val_size=args.val_size,
         seed=args.seed,
         dedup=args.dedup,
+        official_test=args.official_test,
     )
     train_df = subsample(train_df, args.max_train_samples, args.seed)
     val_df = subsample(val_df, args.max_val_samples, args.seed)
@@ -203,22 +204,42 @@ def main(args):
         summary_writer=SummaryWriter(log_dir=checkpoint_dir / "tensorboard"),
     )
 
-    logger.info("Starting fine-tuning...")
-    history = trainer.train(
-        train_loader=train_loader,
-        val_loader=val_loader,
-        num_epochs=args.num_epochs,
-        loss_fn=loss_fn,
-        patience=args.num_epochs,
-    )
-    logger.info("Fine-tuning completed!")
+    if args.eval_checkpoint:
+        # Evaluate an earlier run instead of training
+        logger.info(f"Loading checkpoint {args.eval_checkpoint} (no training)")
+        best_checkpoint_path = Path(args.eval_checkpoint)
+        checkpoint = torch.load(best_checkpoint_path, map_location=device)
+        model.load_state_dict(checkpoint["model_state_dict"])
+        threshold = args.threshold if args.threshold is not None else checkpoint.get("threshold")
+    else:
+        logger.info("Starting fine-tuning...")
+        history = trainer.train(
+            train_loader=train_loader,
+            val_loader=val_loader,
+            num_epochs=args.num_epochs,
+            loss_fn=loss_fn,
+            patience=args.num_epochs,
+        )
+        logger.info("Fine-tuning completed!")
+        best_checkpoint_path = checkpoint_dir / f"model_epoch_{history['best_epoch']}.pt"
+        threshold = None
 
-    # Tune the decision threshold on validation (best checkpoint is already restored)
-    logger.info("Tuning decision threshold on validation set...")
-    _, val_probs, val_labels = trainer.predict(val_loader, loss_fn)
-    threshold = find_best_threshold(val_labels, val_probs)
-    logger.info(f"Best validation threshold: {threshold:.4f}")
-    logger.info(f"Val metrics at tuned threshold: {compute_metrics(val_labels, val_probs, threshold)}")
+    if threshold is not None:
+        logger.info(f"Using the given or saved threshold: {threshold:.4f}")
+    else:
+        # Tune the decision threshold on validation (best checkpoint is already restored)
+        logger.info("Tuning decision threshold on validation set...")
+        _, val_probs, val_labels = trainer.predict(val_loader, loss_fn)
+        threshold = find_best_threshold(val_labels, val_probs)
+        logger.info(f"Best validation threshold: {threshold:.4f}")
+        logger.info(f"Val metrics at tuned threshold: {compute_metrics(val_labels, val_probs, threshold)}")
+
+        # Save the threshold with the best checkpoint of this run so later evaluations reuse it
+        # (not in --eval_checkpoint mode, where validation may be a subsample)
+        if not args.eval_checkpoint:
+            checkpoint = torch.load(best_checkpoint_path, map_location="cpu")
+            checkpoint["threshold"] = threshold
+            torch.save(checkpoint, best_checkpoint_path)
 
     # Final evaluation on test set, at the default and the tuned threshold
     logger.info("Evaluating on test set...")
@@ -268,6 +289,11 @@ if __name__ == "__main__":
         help="Collapse duplicate texts before splitting",
     )
     parser.add_argument(
+        "--official_test",
+        action="store_true",
+        help="Test on the official hold-out set (test_public/private_expanded.csv); the CSV is split into train/val only",
+    )
+    parser.add_argument(
         "--soft_labels",
         action=argparse.BooleanOptionalAction,
         default=True,
@@ -306,6 +332,18 @@ if __name__ == "__main__":
     parser.add_argument("--warmup_ratio", type=float, default=0.05)
     parser.add_argument("--log_every", type=int, default=200)
     parser.add_argument("--num_workers", type=int, default=0)
+    parser.add_argument(
+        "--eval_checkpoint",
+        type=str,
+        default=None,
+        help="Skip training and evaluate this checkpoint of an earlier run (e.g. on --official_test)",
+    )
+    parser.add_argument(
+        "--threshold",
+        type=float,
+        default=None,
+        help="With --eval_checkpoint: decision threshold (default: the one saved in the checkpoint, else tune on val)",
+    )
     parser.add_argument(
         "--checkpoint_dir",
         type=str,

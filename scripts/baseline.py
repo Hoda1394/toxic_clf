@@ -61,6 +61,7 @@ def main(args):
         val_size=args.val_size,
         seed=args.seed,
         dedup=args.dedup,
+        official_test=args.official_test,
     )
 
     if args.max_train_samples is not None and args.max_train_samples < len(train_df):
@@ -136,6 +137,11 @@ if __name__ == "__main__":
         "--dedup",
         action="store_true",
         help="Collapse duplicate texts before splitting",
+    )
+    parser.add_argument(
+        "--official_test",
+        action="store_true",
+        help="Test on the official hold-out set (test_public/private_expanded.csv); the CSV is split into train/val only",
     )
 
     # Baseline arguments

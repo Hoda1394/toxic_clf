@@ -36,6 +36,7 @@ def main(args):
         val_size=args.val_size,
         seed=args.seed,
         dedup=args.dedup,
+        official_test=args.official_test,
     )
     
     # A BPE run saves its tokenizer next to the checkpoints; reuse it. Otherwise
@@ -216,6 +217,11 @@ if __name__ == "__main__":
         "--dedup",
         action="store_true",
         help="Collapse duplicate texts before splitting, as in a --dedup training run (changes the split)",
+    )
+    parser.add_argument(
+        "--official_test",
+        action="store_true",
+        help="Test on the official hold-out set (test_public/private_expanded.csv); the CSV is split into train/val only",
     )
     parser.add_argument(
         "--no_pos_weight",

@@ -343,6 +343,49 @@ def deduplicate_texts(df: pd.DataFrame, text_column: str, target_column: str) ->
     return df
 
 
+OFFICIAL_TEST_FILES = ["test_public_expanded.csv", "test_private_expanded.csv"]
+
+
+def load_official_test_data(
+    data_dir: Union[str, Path],
+    train_texts: pd.Series,
+    text_column: str = "text",
+    target_column: str = "target",
+    dedup: bool = False,
+) -> pd.DataFrame:
+    """Load the official labelled hold-out set (public + private Kaggle test sets).
+
+    Columns are renamed to match train.csv. Texts that also appear in the
+    training CSV (same normalisation as deduplicate_texts) are removed, so
+    any model trained on any part of the CSV can be evaluated on it.
+
+    Args:
+        data_dir: Folder containing OFFICIAL_TEST_FILES
+        train_texts: All texts of the training CSV
+        text_column: Text column name to use (as in train.csv)
+        target_column: Target column name to use (as in train.csv)
+        dedup: Also collapse duplicate texts within the test set
+    """
+    df = pd.concat(
+        [
+            pd.read_csv(Path(data_dir) / name, usecols=["comment_text", "toxicity"])
+            for name in OFFICIAL_TEST_FILES
+        ],
+        ignore_index=True,
+    ).rename(columns={"comment_text": text_column, "toxicity": target_column})
+    df = df.dropna(subset=[text_column, target_column])
+    df["label"] = (df[target_column] >= 0.5).astype(int)
+
+    num_rows = len(df)
+    df = df[~normalize_for_dedup(df[text_column]).isin(set(normalize_for_dedup(train_texts)))]
+    logger.info(f"Official test set: removed {num_rows - len(df)} texts that also appear in the training CSV")
+    if dedup:
+        num_rows = len(df)
+        df = deduplicate_texts(df, text_column, target_column)
+        logger.info(f"Official test set: removed {num_rows - len(df)} duplicate texts")
+    return df
+
+
 def load_civil_comments_data(
     csv_path: str,
     text_column: str = "text",
@@ -351,6 +394,7 @@ def load_civil_comments_data(
     val_size: float = 0.1,
     seed: int = 42,
     dedup: bool = False,
+    official_test: bool = False,
 ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """Load and split Civil Comments dataset.
 
@@ -358,10 +402,13 @@ def load_civil_comments_data(
         csv_path: Path to CSV file
         text_column: Name of text column
         target_column: Name of target column
-        test_size: Test set proportion
-        val_size: Validation set proportion (of remaining data)
+        test_size: Test set proportion (ignored with official_test)
+        val_size: Validation set proportion (of the whole CSV)
         seed: Random seed
         dedup: Collapse duplicate texts before splitting (see deduplicate_texts)
+        official_test: Use the official labelled hold-out set (see
+            load_official_test_data) as the test set, and split the CSV into
+            train and val only
 
     Returns:
         Tuple of (train_df, val_df, test_df)
@@ -379,16 +426,28 @@ def load_civil_comments_data(
         df = deduplicate_texts(df, text_column, target_column)
         logger.info(f"Removed {num_rows - len(df)} duplicate texts ({len(df)} rows left)")
 
-    # First split: train+val vs test
-    train_val_df, test_df = train_test_split(
-        df,
-        test_size=test_size,
-        random_state=seed,
-        stratify=df["label"],
-    )
-    
+    if official_test:
+        # The official hold-out set is the test set; the CSV only gives train and val
+        test_df = load_official_test_data(
+            Path(csv_path).parent,
+            train_texts=df[text_column],
+            text_column=text_column,
+            target_column=target_column,
+            dedup=dedup,
+        )
+        train_val_df = df
+        val_split = val_size
+    else:
+        # First split: train+val vs test
+        train_val_df, test_df = train_test_split(
+            df,
+            test_size=test_size,
+            random_state=seed,
+            stratify=df["label"],
+        )
+        val_split = val_size / (1 - test_size)  # Adjust for already removed test
+
     # Second split: train vs val
-    val_split = val_size / (1 - test_size)  # Adjust for already removed test
     train_df, val_df = train_test_split(
         train_val_df,
         test_size=val_split,

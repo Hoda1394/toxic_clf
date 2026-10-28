@@ -20,6 +20,7 @@ class DataConfig:
     tokenizer: str = "word"
     soft_labels: bool = False
     dedup: bool = False
+    official_test: bool = False
     seed: int = 42
 
 
